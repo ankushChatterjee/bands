@@ -27,18 +27,20 @@ final class LaneManagementTests: XCTestCase {
         return ModelContext(try ModelContainer(for: Lane.self, Thought.self, configurations: configuration))
     }
 
-    func testDefaultLanesAreSeededAndSeedingIsIdempotent() throws {
+    func testFreshStoreStartsWithNoLanes() throws {
         let context = try makeContext()
-        let first = try LaneManagement.seedDefaultsIfNeeded(in: context, now: Date(timeIntervalSince1970: 100))
-        let second = try LaneManagement.seedDefaultsIfNeeded(in: context, now: Date(timeIntervalSince1970: 200))
-        XCTAssertEqual(first.map(\.name), ["Work", "Home", "Ideas"])
-        XCTAssertEqual(second.map(\.id), first.map(\.id))
-        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Lane>()), 3)
+        XCTAssertEqual(try context.fetchCount(FetchDescriptor<Lane>()), 0)
     }
 
     func testTopAndInlineCapturePersistToTheRequestedLane() throws {
         let context = try makeContext()
-        let lanes = try LaneManagement.seedDefaultsIfNeeded(in: context, now: .init(timeIntervalSince1970: 0))
+        let lanes = [
+            Lane(name: "First", order: 0, createdAt: .init(timeIntervalSince1970: 0)),
+            Lane(name: "Second", order: 1, createdAt: .init(timeIntervalSince1970: 0)),
+            Lane(name: "Third", order: 2, createdAt: .init(timeIntervalSince1970: 0))
+        ]
+        lanes.forEach(context.insert)
+        try context.save()
         let top = try XCTUnwrap(LaneManagement.capture(" top ", in: lanes[0], context: context, now: .init(timeIntervalSince1970: 10)))
         let inline = try XCTUnwrap(LaneManagement.capture("inline", in: lanes[2], context: context, now: .init(timeIntervalSince1970: 20)))
         let persisted = try context.fetch(FetchDescriptor<Thought>())

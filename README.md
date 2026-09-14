@@ -52,6 +52,19 @@ Override the identity for a particular release when needed:
 SELF_SIGNING_IDENTITY="Another Local Identity" ./scripts/build_and_release alpha
 ```
 
+For distribution without a second Gatekeeper warning when launching the copied app,
+use a Developer ID Application identity and notarize both artifacts. Store the
+notarytool credentials in the Keychain, then pass the profile name:
+
+```sh
+SELF_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
+NOTARYTOOL_PROFILE="lanes-notary" ./scripts/build_and_release alpha
+```
+
+Notarization is the supported way to avoid separate DMG and app warnings. A local
+Apple Development signature can still produce Gatekeeper warnings on both the DMG
+and the app, and cannot reliably be reduced to exactly one warning by DMG layout.
+
 The app uses SwiftUI for its panel, AppKit for the status item/panel, and SwiftData for the on-device store. It has no network, account, telemetry, notification, voice, or AI code.
 
 ## V1 interaction

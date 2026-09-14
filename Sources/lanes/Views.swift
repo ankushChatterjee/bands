@@ -60,7 +60,8 @@ struct FlowLayout: Layout {
         for row in rows {
             var x = bounds.minX
             for item in row.items {
-                item.subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(item.size))
+                let centeredY = y + (row.height - item.size.height) / 2
+                item.subview.place(at: CGPoint(x: x, y: centeredY), proposal: ProposedViewSize(item.size))
                 x += item.size.width + spacing
             }
             y += row.height + spacing
@@ -541,6 +542,11 @@ extension Notification.Name {
 }
 
 struct LaneRow: View {
+    private static let laneNameFont = Font.subheadline.weight(.semibold)
+    private static let lanePillHorizontalPadding: CGFloat = 11
+    private static let lanePillVerticalPadding: CGFloat = 8
+    private static let lanePillCornerRadius: CGFloat = 9
+
     @Environment(\.modelContext) private var context
     @Bindable var lane: Lane
     @Query(sort: [SortDescriptor(\Thought.order, order: .reverse), SortDescriptor(\Thought.createdAt, order: .reverse)]) private var allThoughts: [Thought]
@@ -562,7 +568,6 @@ struct LaneRow: View {
                 if editing {
                     TextField("Lane name", text: $name)
                         .textFieldStyle(.plain)
-                        .foregroundStyle(LanesTheme.laneText(colorScheme))
                         .focused($focus, equals: .laneRename(lane.id))
                         .onSubmit { saveName() }
                         .onExitCommand { cancelRename() }
@@ -570,15 +575,15 @@ struct LaneRow: View {
                         .accessibilityHint("Press Return to save, or Escape to cancel")
                 } else {
                     Text(lane.name)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(LanesTheme.laneText(colorScheme))
                         .onTapGesture(count: 2) { beginRename() }
                 }
             }
-            .padding(.horizontal, 11)
-            .padding(.vertical, 8)
-            .background(LanesTheme.laneFill(colorScheme), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(.black.opacity(0.10)))
+            .font(Self.laneNameFont)
+            .foregroundStyle(LanesTheme.laneText(colorScheme))
+            .padding(.horizontal, Self.lanePillHorizontalPadding)
+            .padding(.vertical, Self.lanePillVerticalPadding)
+            .background(LanesTheme.laneFill(colorScheme), in: RoundedRectangle(cornerRadius: Self.lanePillCornerRadius, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: Self.lanePillCornerRadius, style: .continuous).strokeBorder(.black.opacity(0.10)))
             .onHover { hoveringLane = $0 }
             .rotationEffect(.degrees(hoveringLane && !editing ? -2 : 0), anchor: .center)
             .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.58), value: hoveringLane)
@@ -594,26 +599,23 @@ struct LaneRow: View {
             .accessibilityLabel("Lane \(lane.name)")
             .accessibilityHint("Double-click or use the context menu to rename")
             if adding {
-                HStack(spacing: 6) {
-                    TextField("", text: $input,
-                              prompt: Text("Add thought").foregroundStyle(LanesTheme.laneText(colorScheme).opacity(0.62)))
-                        .textFieldStyle(.plain)
-                        .frame(minWidth: 112)
-                        .focused($focus, equals: .laneInput(lane.id))
-                        .onSubmit { addThought() }
-                        .onExitCommand { cancelAdd() }
-                        .accessibilityLabel("New thought in \(lane.name)")
-                        .accessibilityHint("Press Return to save, or Escape to cancel")
-                    Image(systemName: "return")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .accessibilityHidden(true)
+                ThoughtBubble {
+                    HStack(spacing: 6) {
+                        TextField("", text: $input,
+                                  prompt: Text("Add thought").foregroundStyle(LanesTheme.secondaryText(colorScheme)))
+                            .textFieldStyle(.plain)
+                            .frame(minWidth: 112)
+                            .focused($focus, equals: .laneInput(lane.id))
+                            .onSubmit { addThought() }
+                            .onExitCommand { cancelAdd() }
+                            .accessibilityLabel("New thought in \(lane.name)")
+                            .accessibilityHint("Press Return to save, or Escape to cancel")
+                        Image(systemName: "return")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .accessibilityHidden(true)
+                    }
                 }
-                    .foregroundStyle(LanesTheme.laneText(colorScheme))
-                    .padding(.horizontal, 11)
-                    .padding(.vertical, 8)
-                    .background(LanesTheme.laneFill(colorScheme), in: Capsule(style: .continuous))
-                    .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.outline(colorScheme)))
             } else {
                 Button {
                     adding = true
@@ -744,6 +746,26 @@ private struct LaneDragPreview: View {
     }
 }
 
+private struct ThoughtBubble<Content: View>: View {
+    @Environment(\.colorScheme) private var colorScheme
+    let age: ThoughtAge
+    let content: Content
+
+    init(age: ThoughtAge = .fresh, @ViewBuilder content: () -> Content) {
+        self.age = age
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(LanesTheme.chipFill(for: age, scheme: colorScheme), in: Capsule(style: .continuous))
+            .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.chipBorder(for: age, scheme: colorScheme), lineWidth: age == .fresh ? 0.7 : 0.9))
+    }
+}
+
 struct ThoughtChip: View {
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -763,12 +785,12 @@ struct ThoughtChip: View {
                     .focused($focus, equals: .thoughtEdit(thought.id)).onSubmit { save() }.onExitCommand { cancelEdit() }
                     .accessibilityLabel("Edit thought \(thought.text)").accessibilityHint("Press Return to save, or Escape to cancel")
             } else {
-                HStack(spacing: 6) {
-                    Text(thought.text).lineLimit(3).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
-                    Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                ThoughtBubble(age: age) {
+                    HStack(spacing: 6) {
+                        Text(thought.text).lineLimit(3).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                    }
                 }
-                .padding(.horizontal, 12).padding(.vertical, 8).background(background, in: Capsule(style: .continuous))
-                .overlay(Capsule(style: .continuous).strokeBorder(border, lineWidth: age == .fresh ? 0.7 : 0.9))
                 .overlay(alignment: .trailing) {
                     if hovering || focus == .thought(thought.id) {
                         Button(action: complete) { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
@@ -805,8 +827,6 @@ struct ThoughtChip: View {
     private var ageLabel: String { ThoughtAging.label(for: thought, settings: agingStore.settings).map { "\($0) old" } ?? "fresh" }
     private func beginEdit() { selectedThoughtID = thought.id; draft = thought.text; editing = true; focus = .thoughtEdit(thought.id) }
     private func cancelEdit() { editing = false; draft = ""; focus = .thought(thought.id) }
-    private var background: Color { LanesTheme.chipFill(for: age, scheme: colorScheme) }
-    private var border: Color { LanesTheme.chipBorder(for: age, scheme: colorScheme) }
     private func complete() { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { ThoughtManagement.complete(thought, now: .now); try? context.save() }; selectedThoughtID = nil; focus = nil }
     private func letGo() { ThoughtManagement.letGo(thought, now: .now); try? context.save(); selectedThoughtID = nil; focus = nil }
     private func move(to lane: Lane) { guard ThoughtManagement.move(thought, to: lane, now: .now) else { return }; try? context.save(); selectedThoughtID = thought.id; focus = .thought(thought.id) }

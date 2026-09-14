@@ -55,14 +55,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.controller.show()
         }
         _ = globalCaptureShortcut.register()
-        seedDefaultsIfNeeded()
     }
 
     @objc private func togglePanel() { controller.toggle() }
-
-    private func seedDefaultsIfNeeded() {
-        _ = try? LaneManagement.seedDefaultsIfNeeded(in: container.mainContext)
-    }
 
     func applicationWillTerminate(_ notification: Notification) {
         globalCaptureShortcut?.unregister()

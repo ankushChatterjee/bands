@@ -98,19 +98,6 @@ enum PanelSelection {
 }
 
 enum LaneManagement {
-    static let defaultNames = ["Work", "Home", "Ideas"]
-
-    @discardableResult
-    static func seedDefaultsIfNeeded(in context: ModelContext, names: [String] = defaultNames, now: Date = .now) throws -> [Lane] {
-        let existing = try context.fetch(FetchDescriptor<Lane>(sortBy: [SortDescriptor(\Lane.order)]))
-        guard existing.isEmpty else { return existing }
-        for (order, name) in names.enumerated() {
-            context.insert(Lane(name: name, order: order, createdAt: now))
-        }
-        try context.save()
-        return try context.fetch(FetchDescriptor<Lane>(sortBy: [SortDescriptor(\Lane.order)]))
-    }
-
     static func validateName(_ rawName: String, existingNames: [String], excluding excludedName: String? = nil) -> LaneNameValidation {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return .empty }
