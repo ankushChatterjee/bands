@@ -14,6 +14,7 @@ final class LanesCommandService {
         do {
             switch name {
             case "lanes/list": return try list(context: context, arguments: arguments)
+            case "lanes/prioritized": return try prioritized(context: context, arguments: arguments)
             case "lanes/search": return try search(context: context, arguments: arguments)
             case "lanes/get": return try get(context: context, arguments: arguments)
             case "lanes/capture": return try capture(context: context, arguments: arguments)
@@ -43,7 +44,9 @@ final class LanesCommandService {
     }
     private func laneJSON(_ lane: Lane) -> [String: Any] { ["id": lane.id.uuidString, "name": lane.name, "order": lane.order, "createdAt": ISO8601DateFormatter().string(from: lane.createdAt)] }
     private func thoughtJSON(_ thought: Thought) -> [String: Any] {
-        var value: [String: Any] = ["id": thought.id.uuidString, "text": thought.text, "createdAt": ISO8601DateFormatter().string(from: thought.createdAt), "updatedAt": ISO8601DateFormatter().string(from: thought.updatedAt), "lastTouchedAt": ISO8601DateFormatter().string(from: thought.lastTouchedAt)]
+        let age = ThoughtAging.age(for: thought)
+        let ageMinutes = max(0, Int(Date.now.timeIntervalSince(thought.createdAt) / 60))
+        var value: [String: Any] = ["id": thought.id.uuidString, "text": thought.text, "createdAt": ISO8601DateFormatter().string(from: thought.createdAt), "updatedAt": ISO8601DateFormatter().string(from: thought.updatedAt), "lastTouchedAt": ISO8601DateFormatter().string(from: thought.lastTouchedAt), "age": age.name, "ageMinutes": ageMinutes, "priority": age.priority.rawValue, "priorityRank": age.priority.rank]
         value["laneId"] = thought.lane?.id.uuidString as Any
         value["completedAt"] = thought.completedAt.map { ISO8601DateFormatter().string(from: $0) } as Any
         value["releasedAt"] = thought.releasedAt.map { ISO8601DateFormatter().string(from: $0) } as Any
@@ -56,6 +59,17 @@ final class LanesCommandService {
             (laneID == nil || thought.lane?.id == laneID) && (includeCompleted || thought.completedAt == nil) && (includeReleased || thought.releasedAt == nil)
         }
         return ["lanes": allLanes.map(laneJSON), "thoughts": result.map(thoughtJSON)]
+    }
+    private func prioritized(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] {
+        let minimumPriority = PriorityLevel(rawValue: arguments["minimumPriority"] as? String ?? "low") ?? .low
+        let result = try thoughts(context)
+            .filter { $0.completedAt == nil && $0.releasedAt == nil && ThoughtAging.age(for: $0).priority.rank >= minimumPriority.rank }
+            .sorted {
+                let left = ThoughtAging.age(for: $0).priority.rank
+                let right = ThoughtAging.age(for: $1).priority.rank
+                return left == right ? $0.createdAt < $1.createdAt : left > right
+            }
+        return ["thoughts": result.map(thoughtJSON)]
     }
     private func search(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] {
         guard let query = arguments["query"] as? String, !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw BridgeError(message: "query is required") }
@@ -75,6 +89,39 @@ final class LanesCommandService {
     }
     private func move(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] { let item = try thought(context, id: id(arguments)); guard let raw = arguments["laneId"] as? String, let laneID = UUID(uuidString: raw) else { throw BridgeError(message: "laneId is required") }; guard ThoughtManagement.move(item, to: try lane(context, id: laneID), now: .now) else { throw BridgeError(message: "Thought is already in that lane") }; try context.save(); return ["thought": thoughtJSON(item)] }
     private func mark(context: ModelContext, arguments: [String: Any], release: Bool) throws -> [String: Any] { let item = try thought(context, id: id(arguments)); if release { ThoughtManagement.letGo(item, now: .now) } else { ThoughtManagement.complete(item, now: .now) }; try context.save(); return ["thought": thoughtJSON(item)] }
+}
+
+private enum PriorityLevel: String {
+    case low, medium, high, urgent
+
+    var rank: Int {
+        switch self {
+        case .low: 1
+        case .medium: 2
+        case .high: 3
+        case .urgent: 4
+        }
+    }
+}
+
+private extension ThoughtAge {
+    var name: String {
+        switch self {
+        case .fresh: "fresh"
+        case .warm: "warm"
+        case .attention: "attention"
+        case .old: "old"
+        }
+    }
+
+    var priority: PriorityLevel {
+        switch self {
+        case .fresh: .low
+        case .warm: .medium
+        case .attention: .high
+        case .old: .urgent
+        }
+    }
 }
 
 private struct BridgeError: Error { let message: String }
@@ -110,7 +157,7 @@ final class LanesMCPBridge: @unchecked Sendable {
         if method == "tools/list" { send(["jsonrpc": "2.0", "id": id, "result": ["tools": Self.toolDefinitions()]], client: client); return }
         guard method == "tools/call" || method == "lanes.command", let params = object["params"] as? [String: Any] else { send(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "Unknown method"]], client: client); return }
         let rawName = (params["name"] as? String) ?? (params["command"] as? String) ?? ""
-        let aliases = ["list_lanes": "lanes/list", "list_thoughts": "lanes/list", "search": "lanes/search", "get": "lanes/get", "capture": "lanes/capture", "update_thought": "lanes/edit", "complete_thought": "lanes/complete", "release_thought": "lanes/release", "move_thought": "lanes/move"]
+        let aliases = ["list_lanes": "lanes/list", "list_thoughts": "lanes/list", "list_prioritized_thoughts": "lanes/prioritized", "search": "lanes/search", "get": "lanes/get", "capture": "lanes/capture", "update_thought": "lanes/edit", "complete_thought": "lanes/complete", "release_thought": "lanes/release", "move_thought": "lanes/move"]
         guard let name = aliases[rawName] ?? (rawName.hasPrefix("lanes/") ? rawName : nil) else { send(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "Unknown command"]], client: client); return }
         var arguments = (params["arguments"] as? [String: Any]) ?? (params["args"] as? [String: Any]) ?? params
         if arguments["id"] == nil, let thoughtID = arguments["thoughtId"] { arguments["id"] = thoughtID }
@@ -127,7 +174,7 @@ final class LanesMCPBridge: @unchecked Sendable {
     }
     private func send(_ response: [String: Any], client: Int32) { if let out = try? JSONSerialization.data(withJSONObject: response) { var line = out; line.append(10); _ = line.withUnsafeBytes { Darwin.write(client, $0.baseAddress, line.count) } } }
     static func toolDefinitions() -> [[String: Any]] { [
-        ("list_lanes", "List lanes"), ("list_thoughts", "List thoughts"), ("search", "Search thoughts"), ("get", "Get a thought"),
+        ("list_lanes", "List lanes"), ("list_thoughts", "List thoughts"), ("list_prioritized_thoughts", "List active thoughts ordered by their age-derived priority"), ("search", "Search thoughts"), ("get", "Get a thought"),
         ("capture", "Capture a thought"), ("update_thought", "Edit a thought"), ("move_thought", "Move a thought"),
         ("complete_thought", "Complete a thought"), ("release_thought", "Release a thought")
     ].map { ["name": $0.0, "description": $0.1] } }

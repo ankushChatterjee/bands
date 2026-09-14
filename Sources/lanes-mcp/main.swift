@@ -75,6 +75,7 @@ struct MCPServer {
     let tools: [[String: Any]] = [
         ["name": "list_lanes", "description": "List lanes in Lanes.", "inputSchema": ["type": "object", "properties": [:]]],
         ["name": "list_thoughts", "description": "List thoughts, optionally filtered by lane or state.", "inputSchema": ["type": "object", "properties": ["laneId": ["type": "string"], "includeCompleted": ["type": "boolean"], "includeReleased": ["type": "boolean"]]]],
+        ["name": "list_prioritized_thoughts", "description": "List active thoughts sorted by age-derived priority: fresh is low, warm is medium, attention is high, and old is urgent.", "inputSchema": ["type": "object", "properties": ["minimumPriority": ["type": "string", "enum": ["low", "medium", "high", "urgent"]]]]],
         ["name": "search", "description": "Search thoughts by text.", "inputSchema": ["type": "object", "properties": ["query": ["type": "string"]], "required": ["query"]]],
         ["name": "get", "description": "Get one thought by ID.", "inputSchema": ["type": "object", "properties": ["thoughtId": ["type": "string"]], "required": ["thoughtId"]]],
         ["name": "capture", "description": "Capture a new thought into Lanes.", "inputSchema": ["type": "object", "properties": ["text": ["type": "string"], "laneId": ["type": "string"]], "required": ["text"]]],
