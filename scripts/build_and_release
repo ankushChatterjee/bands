@@ -2,17 +2,22 @@
 set -eu
 
 usage() {
-    printf '%s\n' "Usage: $0 VERSION" >&2
-    printf '%s\n' "Example: $0 0.1.0" >&2
+    printf '%s\n' "Usage: $0 RELEASE_TAG" >&2
+    printf '%s\n' "Examples: $0 alpha | $0 beta.2 | $0 release-candidate" >&2
     exit 2
 }
 
 [ "$#" -eq 1 ] || usage
-version=$1
+release_tag=$1
 
-case "$version" in
-    [0-9]*.[0-9]*.[0-9]*) ;;
-    *) printf 'Invalid version: %s (expected MAJOR.MINOR.PATCH)\n' "$version" >&2; exit 2 ;;
+git check-ref-format --allow-onelevel "refs/tags/$release_tag" >/dev/null 2>&1 || {
+    printf 'Invalid Git tag: %s\n' "$release_tag" >&2
+    exit 2
+}
+
+case "$release_tag" in
+    */*) artifact_label=$(printf '%s' "$release_tag" | tr '/' '-') ;;
+    *) artifact_label=$release_tag ;;
 esac
 
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
@@ -33,7 +38,7 @@ if [ -n "$(git status --porcelain)" ]; then
     exit 1
 fi
 
-tag="v$version"
+tag="$release_tag"
 if git rev-parse --verify --quiet "refs/tags/$tag" >/dev/null; then
     printf 'Tag already exists: %s\n' "$tag" >&2
     exit 1
@@ -42,10 +47,10 @@ fi
 build_number=$(git rev-list --count HEAD)
 [ "$build_number" -gt 0 ] || build_number=1
 
-release_dir="$root_dir/.build/releases/$version"
+release_dir="$root_dir/.build/releases/$artifact_label"
 archive_path="$release_dir/lanes.xcarchive"
 app_path="$archive_path/Products/Applications/lanes.app"
-dmg_path="$release_dir/lanes-$version.dmg"
+dmg_path="$release_dir/lanes-$artifact_label.dmg"
 staging_dir="$release_dir/dmg-root"
 
 mkdir -p "$release_dir"
@@ -53,13 +58,13 @@ rm -rf "$staging_dir"
 
 "$root_dir/scripts/generate-placeholder-icon.sh"
 
-printf 'Building %s from branch %s at build %s...\n' "$version" "$branch" "$build_number"
+printf 'Building %s from branch %s at build %s...\n' "$release_tag" "$branch" "$build_number"
 xcodebuild \
     -project "$root_dir/lanes.xcodeproj" \
     -scheme lanes \
     -configuration Release \
     -archivePath "$archive_path" \
-    MARKETING_VERSION="$version" \
+    MARKETING_VERSION="$release_tag" \
     CURRENT_PROJECT_VERSION="$build_number" \
     CODE_SIGNING_ALLOWED=NO \
     archive
@@ -70,7 +75,7 @@ mkdir -p "$staging_dir"
 ditto "$app_path" "$staging_dir/lanes.app"
 ln -s /Applications "$staging_dir/Applications"
 hdiutil create \
-    -volname "lanes $version" \
+    -volname "lanes $artifact_label" \
     -srcfolder "$staging_dir" \
     -ov \
     -format UDZO \
@@ -81,6 +86,6 @@ git tag -a "$tag" -m "Release lanes $version"
 printf '\nRelease complete.\n'
 printf 'Branch:   %s\n' "$branch"
 printf 'Tag:      %s\n' "$tag"
-printf 'Version:  %s\n' "$version"
+printf 'Version:  %s\n' "$release_tag"
 printf 'Build:    %s\n' "$build_number"
 printf 'DMG:      %s\n' "$dmg_path"
