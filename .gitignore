@@ -1,0 +1,44 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Xcode user-specific state
+*.xcuserstate
+xcuserdata/
+*.xccheckout
+*.moved-aside
+DerivedData/
+
+# Xcode build and archive products
+build/
+Build/
+*.xcarchive/
+*.app/
+*.dSYM/
+*.dSYM.zip
+
+# Local distribution artifacts
+*.dmg
+*.pkg
+*.zip
+*.tar.gz
+
+# Local signing and secrets
+*.p12
+*.mobileprovision
+*.provisionprofile
+.env
+.env.*
+!.env.example
+
+# IDE/editor files
+.idea/
+.vscode/
+*.swp
+*.swo

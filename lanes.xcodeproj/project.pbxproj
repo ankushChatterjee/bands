@@ -1,0 +1,92 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		A10000010000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000001 /* AppDelegate.swift */; };
+		A10000010000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000002 /* Models.swift */; };
+		A10000010000000000000003 /* PanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000003 /* PanelController.swift */; };
+		A10000010000000000000004 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000004 /* Views.swift */; };
+		A10000010000000000000005 /* lanesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000005 /* lanesApp.swift */; };
+		A10000010000000000000006 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000006 /* Assets.xcassets */; };
+		A10000010000000000000007 /* GlobalCaptureShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000008 /* GlobalCaptureShortcut.swift */; };
+		A10000010000000000000008 /* ThoughtAgingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000009 /* ThoughtAgingTests.swift */; };
+		A10000010000000000000009 /* LaneManagementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000A /* LaneManagementTests.swift */; };
+		A1000001000000000000000A /* GlobalCaptureShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000B /* GlobalCaptureShortcutTests.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		A20000010000000000000000 /* lanes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lanes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000010000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
+		A20000010000000000000002 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		A20000010000000000000003 /* PanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelController.swift; sourceTree = "<group>"; };
+		A20000010000000000000004 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
+		A20000010000000000000005 /* lanesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = lanesApp.swift; sourceTree = "<group>"; };
+		A20000010000000000000006 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A20000010000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000010000000000000008 /* GlobalCaptureShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalCaptureShortcut.swift; sourceTree = "<group>"; };
+		A20000010000000000000009 /* ThoughtAgingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtAgingTests.swift; sourceTree = "<group>"; };
+		A2000001000000000000000A /* LaneManagementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaneManagementTests.swift; sourceTree = "<group>"; };
+		A2000001000000000000000B /* GlobalCaptureShortcutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalCaptureShortcutTests.swift; sourceTree = "<group>"; };
+		A2000001000000000000000C /* lanesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = lanesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A30000010000000000000001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A30000010000000000000004 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A40000010000000000000000 = {isa = PBXGroup; children = (A40000010000000000000001, A40000010000000000000002, A40000010000000000000003, A40000010000000000000004,); sourceTree = "<group>"; };
+		A40000010000000000000001 /* Sources */ = {isa = PBXGroup; children = (A20000010000000000000001, A20000010000000000000002, A20000010000000000000003, A20000010000000000000004, A20000010000000000000005, A20000010000000000000008,); path = Sources/lanes; sourceTree = "<group>"; };
+		A40000010000000000000002 /* Supporting */ = {isa = PBXGroup; children = (A20000010000000000000006, A20000010000000000000007,); path = Supporting; sourceTree = "<group>"; };
+		A40000010000000000000003 /* Products */ = {isa = PBXGroup; children = (A20000010000000000000000,); name = Products; sourceTree = "<group>"; };
+		A40000010000000000000004 /* Tests */ = {isa = PBXGroup; children = (A40000010000000000000005,); path = Tests; sourceTree = "<group>"; };
+		A40000010000000000000005 /* lanesTests */ = {isa = PBXGroup; children = (A20000010000000000000009, A2000001000000000000000A, A2000001000000000000000B,); path = lanesTests; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A50000010000000000000001 /* lanes */ = {isa = PBXNativeTarget; buildConfigurationList = A60000010000000000000001; buildPhases = (A30000010000000000000002, A30000010000000000000001, A30000010000000000000003,); buildRules = (); dependencies = (); name = lanes; productName = lanes; productReference = A20000010000000000000000; productType = "com.apple.product-type.application"; };
+		A50000010000000000000002 /* lanesTests */ = {isa = PBXNativeTarget; buildConfigurationList = A60000010000000000000002; buildPhases = (A30000010000000000000005, A30000010000000000000004,); buildRules = (); dependencies = (A90000010000000000000002,); name = lanesTests; productName = lanesTests; productReference = A2000001000000000000000C; productType = "com.apple.product-type.bundle.unit-test"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A70000010000000000000001 /* Project object */ = {isa = PBXProject; attributes = {LastSwiftUpdateCheck = 1640;}; buildConfigurationList = A60000010000000000000000; compatibilityVersion = "Xcode 16.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base,); mainGroup = A40000010000000000000000; productRefGroup = A40000010000000000000003; projectDirPath = ""; projectRoot = ""; targets = (A50000010000000000000001, A50000010000000000000002,); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A30000010000000000000003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000006,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A30000010000000000000002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000001, A10000010000000000000002, A10000010000000000000003, A10000010000000000000004, A10000010000000000000005, A10000010000000000000007,); runOnlyForDeploymentPostprocessing = 0; };
+		A30000010000000000000005 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A10000010000000000000008, A10000010000000000000009, A1000001000000000000000A,); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		A80000010000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CLANG_ENABLE_MODULES = YES; CODE_SIGNING_ALLOWED = NO; CURRENT_PROJECT_VERSION = 1; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Supporting/Info.plist; MARKETING_VERSION = 0.1.0; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.lanes; PRODUCT_NAME = lanes; SWIFT_VERSION = 5.0;}; name = Debug; };
+		A80000010000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CLANG_ENABLE_MODULES = YES; CODE_SIGNING_ALLOWED = NO; CURRENT_PROJECT_VERSION = 1; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Supporting/Info.plist; MARKETING_VERSION = 0.1.0; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.lanes; PRODUCT_NAME = lanes; SWIFT_VERSION = 5.0;}; name = Release; };
+		A80000010000000000000003 /* Project Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SWIFT_VERSION = 5.0;}; name = Debug; };
+		A80000010000000000000004 /* Project Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SWIFT_VERSION = 5.0;}; name = Release; };
+		A80000010000000000000005 /* Tests Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.lanesTests; PRODUCT_NAME = lanesTests; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/lanes.app/Contents/MacOS/lanes";}; name = Debug; };
+		A80000010000000000000006 /* Tests Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.lanesTests; PRODUCT_NAME = lanesTests; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/lanes.app/Contents/MacOS/lanes";}; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A60000010000000000000000 /* Build configuration list for PBXProject */ = {isa = XCConfigurationList; buildConfigurations = (A80000010000000000000003, A80000010000000000000004,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A60000010000000000000001 /* Build configuration list for PBXNativeTarget */ = {isa = XCConfigurationList; buildConfigurations = (A80000010000000000000001, A80000010000000000000002,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A60000010000000000000002 /* Build configuration list for PBXNativeTarget */ = {isa = XCConfigurationList; buildConfigurations = (A80000010000000000000005, A80000010000000000000006,); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+
+/* Begin PBXContainerItemProxy section */
+		A90000010000000000000001 = {isa = PBXContainerItemProxy; containerPortal = A70000010000000000000001; proxyType = 1; remoteGlobalIDString = A50000010000000000000001; remoteInfo = lanes; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXTargetDependency section */
+		A90000010000000000000002 = {isa = PBXTargetDependency; target = A50000010000000000000001; targetProxy = A90000010000000000000001; };
+/* End PBXTargetDependency section */
+	};
+	rootObject = A70000010000000000000001 /* Project object */;
+}
