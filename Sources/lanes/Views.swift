@@ -353,54 +353,26 @@ private enum MCPSettings {
 /// view only persists and communicates the user's preference.
 private struct MCPControl: View {
     @AppStorage(MCPSettings.enabledKey) private var enabled = true
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var showingInfo = false
 
     var body: some View {
-        HStack(spacing: 5) {
-            Toggle(isOn: $enabled) {
-                Label(enabled ? "MCP on" : "MCP off", systemImage: enabled ? "point.3.connected.trianglepath.dotted" : "point.3.connected.trianglepath.dotted")
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(enabled ? Color.green : LanesTheme.secondaryText(colorScheme))
-            }
-            .toggleStyle(.button)
-            .buttonStyle(.plain)
-            .padding(.horizontal, 9)
-            .padding(.vertical, 7)
-            .background(enabled ? Color.green.opacity(0.12) : Color.primary.opacity(0.08), in: Capsule(style: .continuous))
-            .overlay(Capsule(style: .continuous).strokeBorder(enabled ? Color.green.opacity(0.30) : Color.primary.opacity(0.15)))
-            .accessibilityLabel("MCP connection")
-            .accessibilityValue(enabled ? "On" : "Off")
-            .accessibilityHint("Toggle MCP access to your lanes and thoughts")
-            .onChange(of: enabled) { _, value in
-                UserDefaults.standard.set(value, forKey: MCPSettings.enabledKey)
-            }
+        HStack(spacing: 7) {
+            Label("MCP", systemImage: "point.3.connected.trianglepath.dotted")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
 
-            Button { showingInfo.toggle() } label: {
-                Image(systemName: "info.circle")
-                    .font(.caption.weight(.medium))
-                    .frame(width: 22, height: 22)
-            }
-            .buttonStyle(.plain)
-            .foregroundStyle(.secondary)
-            .accessibilityLabel("MCP connection information")
-            .popover(isPresented: $showingInfo, arrowEdge: .bottom) {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label(enabled ? "MCP is available" : "MCP is paused", systemImage: enabled ? "checkmark.circle.fill" : "pause.circle.fill")
-                        .font(.headline)
-                        .foregroundStyle(enabled ? Color.green : .secondary)
-                    Text(enabled
-                         ? "Connected tools can access your lanes and active thoughts."
-                         : "MCP access is paused until you turn it back on.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(14)
-                .frame(width: 240, alignment: .leading)
-            }
-            .help("MCP connection information")
+            Toggle("MCP connection", isOn: $enabled)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .tint(LanesTheme.graphite)
         }
+        .padding(.leading, 9)
+        .padding(.trailing, 7)
+        .padding(.vertical, 6)
+        .background(.primary.opacity(0.06), in: Capsule(style: .continuous))
+        .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.10)))
+        .accessibilityElement(children: .contain)
+        .accessibilityHint("Toggle MCP access to your lanes and thoughts")
         .onAppear {
             UserDefaults.standard.register(defaults: [MCPSettings.enabledKey: true])
         }
