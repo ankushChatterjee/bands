@@ -4,6 +4,8 @@ set -eu
 usage() {
     printf '%s\n' "Usage: $0 RELEASE_TAG" >&2
     printf '%s\n' "Examples: $0 alpha | $0 beta.2 | $0 release-candidate" >&2
+    printf '%s\n' "Uses the local code-signing identity 'Apple Development: ac.ankush15@gmail.com (J6G9D2S38S)' by default." >&2
+    printf '%s\n' "Override with: SELF_SIGNING_IDENTITY='Your local code-signing identity'" >&2
     exit 2
 }
 
@@ -22,6 +24,8 @@ esac
 
 root_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 cd "$root_dir"
+
+signing_identity=${SELF_SIGNING_IDENTITY:-Apple Development: ac.ankush15@gmail.com (J6G9D2S38S)}
 
 git rev-parse --show-toplevel >/dev/null 2>&1 || {
     printf '%s\n' 'Not inside a Git repository.' >&2
@@ -71,6 +75,10 @@ xcodebuild \
 
 [ -d "$app_path" ] || { printf '%s\n' 'Archive did not contain lanes.app.' >&2; exit 1; }
 
+printf 'Self-signing lanes.app with %s...\n' "$signing_identity"
+codesign --force --deep --options runtime --timestamp=none --sign "$signing_identity" "$app_path"
+codesign --verify --deep --strict --verbose=2 "$app_path"
+
 mkdir -p "$staging_dir"
 ditto "$app_path" "$staging_dir/lanes.app"
 ln -s /Applications "$staging_dir/Applications"
@@ -81,7 +89,11 @@ hdiutil create \
     -format UDZO \
     "$dmg_path"
 
-git tag -a "$tag" -m "Release lanes $version"
+printf 'Self-signing release DMG with %s...\n' "$signing_identity"
+codesign --force --timestamp=none --sign "$signing_identity" "$dmg_path"
+codesign --verify --strict --verbose=2 "$dmg_path"
+
+git tag -a "$tag" -m "Release lanes $release_tag"
 
 printf '\nRelease complete.\n'
 printf 'Branch:   %s\n' "$branch"

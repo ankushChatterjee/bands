@@ -30,6 +30,28 @@ In Xcode, select the `lanes` scheme and Run. The target uses `Supporting/Info.pl
 
 The archive and scripted builds intentionally set `CODE_SIGNING_ALLOWED=NO` for local development. No signing, notarization, Gatekeeper approval, or Dock behavior is claimed. For distribution, configure your own Apple Developer team, signing identity, provisioning settings, and notarization workflow in Xcode.
 
+## Local self-signed releases
+
+`scripts/build_and_release` re-signs the archived app and its DMG using a local code-signing identity. It is not a Developer ID signature and does not avoid Gatekeeper's unknown-developer warning.
+
+List local signing identities with:
+
+```sh
+security find-identity -v -p codesigning
+```
+
+The release script uses the local `Apple Development: ac.ankush15@gmail.com (J6G9D2S38S)` identity by default. Create a release with it:
+
+```sh
+./scripts/build_and_release alpha
+```
+
+Override the identity for a particular release when needed:
+
+```sh
+SELF_SIGNING_IDENTITY="Another Local Identity" ./scripts/build_and_release alpha
+```
+
 The app uses SwiftUI for its panel, AppKit for the status item/panel, and SwiftData for the on-device store. It has no network, account, telemetry, notification, voice, or AI code.
 
 ## V1 interaction
