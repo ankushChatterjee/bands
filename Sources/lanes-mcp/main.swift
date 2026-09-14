@@ -89,7 +89,15 @@ struct MCPServer {
         let id = request["id"]
         if method.hasPrefix("notifications/") { return nil }
         if method == "initialize" {
-            return result(id, ["protocolVersion": "2024-11-05", "capabilities": ["tools": [:]], "serverInfo": ["name": "lanes", "version": "0.1.0"]])
+            let requestedVersion = (request["params"] as? [String: Any])?["protocolVersion"] as? String
+            let supportedVersions = ["2024-11-05", "2025-03-26", "2025-06-18", "2025-11-25"]
+            let protocolVersion = requestedVersion.flatMap { supportedVersions.contains($0) ? $0 : nil } ?? "2025-11-25"
+            return result(id, [
+                "protocolVersion": protocolVersion,
+                "capabilities": ["tools": [:]],
+                "serverInfo": ["name": "lanes", "version": "0.1.1"],
+                "instructions": "Lanes stores local thoughts. Use list_lanes or list_thoughts before modifying a thought, and ask before creating, editing, moving, completing, or releasing one."
+            ])
         }
         if method == "ping" { return result(id, [:]) }
         if method == "tools/list" { return result(id, ["tools": tools]) }
