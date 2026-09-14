@@ -275,6 +275,7 @@ struct RootView: View {
                     .accessibilityLabel("Delete lane")
                     .accessibilityHint("Drop the dragged lane here to delete it")
             }
+            MCPControl()
             Button(action: openSettings) {
                 Image(systemName: "gearshape")
                     .font(.body.weight(.medium))
@@ -340,6 +341,69 @@ struct RootView: View {
             }
         }
         return true
+    }
+}
+
+private enum MCPSettings {
+    static let enabledKey = "mcpEnabled"
+}
+
+/// The MCP switch lives on the panel so its availability is visible without
+/// opening Settings. The connection itself is owned by the app layer; this
+/// view only persists and communicates the user's preference.
+private struct MCPControl: View {
+    @AppStorage(MCPSettings.enabledKey) private var enabled = true
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var showingInfo = false
+
+    var body: some View {
+        HStack(spacing: 5) {
+            Toggle(isOn: $enabled) {
+                Label(enabled ? "MCP on" : "MCP off", systemImage: enabled ? "point.3.connected.trianglepath.dotted" : "point.3.connected.trianglepath.dotted")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(enabled ? Color.green : LanesTheme.secondaryText(colorScheme))
+            }
+            .toggleStyle(.button)
+            .buttonStyle(.plain)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 7)
+            .background(enabled ? Color.green.opacity(0.12) : Color.primary.opacity(0.08), in: Capsule(style: .continuous))
+            .overlay(Capsule(style: .continuous).strokeBorder(enabled ? Color.green.opacity(0.30) : Color.primary.opacity(0.15)))
+            .accessibilityLabel("MCP connection")
+            .accessibilityValue(enabled ? "On" : "Off")
+            .accessibilityHint("Toggle MCP access to your lanes and thoughts")
+            .onChange(of: enabled) { _, value in
+                UserDefaults.standard.set(value, forKey: MCPSettings.enabledKey)
+            }
+
+            Button { showingInfo.toggle() } label: {
+                Image(systemName: "info.circle")
+                    .font(.caption.weight(.medium))
+                    .frame(width: 22, height: 22)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .accessibilityLabel("MCP connection information")
+            .popover(isPresented: $showingInfo, arrowEdge: .bottom) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(enabled ? "MCP is available" : "MCP is paused", systemImage: enabled ? "checkmark.circle.fill" : "pause.circle.fill")
+                        .font(.headline)
+                        .foregroundStyle(enabled ? Color.green : .secondary)
+                    Text(enabled
+                         ? "Connected tools can access your lanes and active thoughts."
+                         : "MCP access is paused until you turn it back on.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .padding(14)
+                .frame(width: 240, alignment: .leading)
+            }
+            .help("MCP connection information")
+        }
+        .onAppear {
+            UserDefaults.standard.register(defaults: [MCPSettings.enabledKey: true])
+        }
     }
 }
 
