@@ -199,24 +199,7 @@ struct RootView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    if lanes.isEmpty {
-                        EmptyLanesView(onCreate: beginNewLane)
-                            .frame(maxWidth: .infinity, minHeight: 180)
-                    } else {
-                        ForEach(lanes) { lane in
-                            LaneRow(lane: lane, lanes: lanes, now: timestampRefreshDate, selectedThoughtID: $selectedThoughtID, focus: $focus, draggingLaneID: $draggingLaneID, onDelete: deleteLane, onMoveLane: moveLane)
-                                .transition(reduceMotion ? .identity : .move(edge: .top).combined(with: .opacity))
-                            if lane.id != lanes.last?.id { Divider() }
-                        }
-                    }
-                }
-                .animation(reduceMotion ? nil : .snappy(duration: 0.28, extraBounce: 0.08), value: lanes.map(\.id))
-                .padding(.horizontal, 14)
-                .padding(.bottom, 52)
-            }
-            .padding(.top, 8)
+            lanesList
         }
         .padding(6)
         .frame(minWidth: 650, idealWidth: 720, maxWidth: 780, minHeight: 190, idealHeight: 330, maxHeight: 500)
@@ -264,7 +247,28 @@ struct RootView: View {
                 case .up: moveSelection(.up)
                 default: break
                 }
+        }
+    }
+
+    private var lanesList: some View {
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                if lanes.isEmpty {
+                    EmptyLanesView(onCreate: beginNewLane)
+                        .frame(maxWidth: .infinity, minHeight: 180)
+                } else {
+                    ForEach(lanes) { lane in
+                        LaneRow(lane: lane, lanes: lanes, now: timestampRefreshDate, selectedThoughtID: $selectedThoughtID, focus: $focus, draggingLaneID: $draggingLaneID, onDelete: deleteLane, onMoveLane: moveLane)
+                            .transition(reduceMotion ? .identity : .move(edge: .top).combined(with: .opacity))
+                        if lane.id != lanes.last?.id { Divider() }
+                    }
+                }
             }
+            .animation(reduceMotion ? nil : .snappy(duration: 0.28, extraBounce: 0.08), value: lanes.map(\.id))
+            .padding(.horizontal, 14)
+            .padding(.bottom, 52)
+        }
+        .padding(.top, 8)
     }
 
     private var floatingActions: some View {
@@ -692,6 +696,7 @@ struct LaneRow: View {
     @Bindable var lane: Lane
     @Query(sort: [SortDescriptor(\Thought.order, order: .reverse), SortDescriptor(\Thought.createdAt, order: .reverse)]) private var allThoughts: [Thought]
     let lanes: [Lane]
+    let now: Date
     @Binding var selectedThoughtID: UUID?
     @FocusState.Binding var focus: RootView.PanelFocus?
     @Binding var draggingLaneID: UUID?
@@ -699,7 +704,6 @@ struct LaneRow: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(InsertionPreferences.thoughtsAtEndKey) private var thoughtsAtEnd = false
     let onDelete: (Lane) -> Void
-    let now: Date
     let onMoveLane: (Lane, Lane) -> Void
     @State private var adding = false; @State private var input = ""; @State private var editing = false; @State private var name = ""; @State private var showingDeleteConfirmation = false; @State private var hoveringAdd = false; @State private var hoveringLane = false; @State private var dropTargeted = false; @State private var thoughtFrames: [UUID: CGRect] = [:]
     @State private var insertionIndex: Int?
