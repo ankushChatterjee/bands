@@ -432,6 +432,7 @@ struct SettingsView: View {
     @EnvironmentObject private var agingStore: ThoughtAgingSettingsStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
+    @State private var initialAppearance = AppAppearance.system.rawValue
     @State private var fresh = ThoughtAgingSettings.defaults.freshMinutes
     @State private var warm = ThoughtAgingSettings.defaults.warmMinutes
     @State private var attention = ThoughtAgingSettings.defaults.attentionMinutes
@@ -495,8 +496,13 @@ struct SettingsView: View {
                         .padding(.top, 7)
                 }
                 HStack {
-                    Button("Restore Defaults") { setDraft(.defaults); agingStore.restoreDefaults() }
+                    Button("Restore Defaults") { setDraft(.defaults) }
                     Spacer()
+                    Button("Cancel", role: .cancel) {
+                        appearance = initialAppearance
+                        AppAppearance.apply(initialAppearance)
+                        dismiss()
+                    }
                     Button("Apply") {
                         agingStore.update(draft)
                         dismiss()
@@ -511,6 +517,7 @@ struct SettingsView: View {
         .frame(width: 460, height: 458, alignment: .topLeading)
         .background(LanesTheme.panel(colorScheme))
         .onAppear {
+            initialAppearance = appearance
             setDraft(agingStore.settings)
             AppAppearance.apply(appearance)
         }
