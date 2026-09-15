@@ -48,7 +48,9 @@ enum LanesTheme {
     }
 
     static func controlFill(_ scheme: ColorScheme) -> Color {
-        scheme == .dark ? Color.white.opacity(0.14) : Color.white.opacity(0.82)
+        scheme == .dark
+            ? Color(red: 0.22, green: 0.22, blue: 0.24)
+            : Color(red: 0.86, green: 0.86, blue: 0.89)
     }
 
     static func controlBorder(_ scheme: ColorScheme) -> Color {
@@ -267,8 +269,8 @@ struct RootView: View {
                     .frame(width: 160)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 8)
-                    .background(.primary.opacity(0.08), in: Capsule(style: .continuous))
-                    .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.25)))
+                    .background(LanesTheme.controlFill(colorScheme), in: Capsule(style: .continuous))
+                    .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
                     .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
                     .onSubmit { addLane() }.focused($focus, equals: .newLane)
                     .onExitCommand { cancelNewLane() }
@@ -280,8 +282,8 @@ struct RootView: View {
                         .font(.subheadline.weight(.medium))
                         .padding(.horizontal, 11)
                         .padding(.vertical, 8)
-                        .background(LanesTheme.softGray, in: Capsule(style: .continuous))
-                        .overlay(Capsule(style: .continuous).strokeBorder(.black.opacity(0.10)))
+                        .background(LanesTheme.laneFill(colorScheme), in: Capsule(style: .continuous))
+                        .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
                         .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
                 }
                 .buttonStyle(.plain)
