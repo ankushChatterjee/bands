@@ -474,11 +474,6 @@ struct LanesPanelBackground: View {
     var body: some View {
         RoundedRectangle(cornerRadius: 22, style: .continuous)
             .fill(LanesTheme.panel(colorScheme))
-            .overlay {
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(LanesTheme.outline(colorScheme), lineWidth: 1)
-            }
-            .shadow(color: .black.opacity(colorScheme == .dark ? 0.42 : 0.16), radius: 24, y: 12)
     }
 }
 
