@@ -58,22 +58,29 @@ enum LanesTheme {
         scheme == .dark ? Color.white.opacity(0.22) : Color.black.opacity(0.12)
     }
 
-    static func chipFill(for age: ThoughtAge, scheme: ColorScheme) -> Color {
+    /// Age uses one semantic accent per state in every appearance. The fill
+    /// opacity changes with the background, but the hue does not.
+    static func chipAccent(for age: ThoughtAge) -> Color {
         switch age {
-        case .fresh: return scheme == .dark ? Color.white.opacity(0.075) : Color.white.opacity(0.84)
-        case .warm: return scheme == .dark ? Color(red: 0.23, green: 0.20, blue: 0.13) : Color(red: 1.0, green: 0.95, blue: 0.80)
-        case .attention: return scheme == .dark ? Color(red: 0.28, green: 0.16, blue: 0.10) : Color(red: 1.0, green: 0.86, blue: 0.70)
-        case .old: return scheme == .dark ? Color(red: 0.29, green: 0.10, blue: 0.11) : Color(red: 1.0, green: 0.79, blue: 0.79)
+        case .fresh: return .clear
+        case .warm: return Color(red: 0.76, green: 0.57, blue: 0.16)
+        case .attention: return Color(red: 0.90, green: 0.39, blue: 0.08)
+        case .old: return Color(red: 0.88, green: 0.23, blue: 0.25)
         }
     }
 
-    static func chipBorder(for age: ThoughtAge, scheme: ColorScheme) -> Color {
-        switch age {
-        case .fresh: return scheme == .dark ? .white.opacity(0.16) : .black.opacity(0.12)
-        case .warm: return Color(red: 0.76, green: 0.57, blue: 0.16).opacity(scheme == .dark ? 0.65 : 0.48)
-        case .attention: return Color(red: 0.90, green: 0.39, blue: 0.08).opacity(scheme == .dark ? 0.70 : 0.52)
-        case .old: return Color(red: 0.88, green: 0.23, blue: 0.25).opacity(scheme == .dark ? 0.72 : 0.56)
+    static func chipFill(for age: ThoughtAge, scheme: ColorScheme) -> Color {
+        if age == .fresh {
+            return scheme == .dark ? Color.white.opacity(0.075) : Color.white.opacity(0.84)
         }
+        return chipAccent(for: age).opacity(scheme == .dark ? 0.22 : 0.14)
+    }
+
+    static func chipBorder(for age: ThoughtAge, scheme: ColorScheme) -> Color {
+        if age == .fresh {
+            return scheme == .dark ? .white.opacity(0.16) : .black.opacity(0.12)
+        }
+        return chipAccent(for: age).opacity(scheme == .dark ? 0.72 : 0.56)
     }
 }
 
@@ -947,6 +954,14 @@ struct ThoughtChip: View {
     @State private var editing = false; @State private var draft = ""; @State private var hovering = false
     var age: ThoughtAge { ThoughtAging.age(for: thought, settings: agingStore.settings, now: now) }
     var timestamp: String { ThoughtTimestamp.label(since: thought.createdAt, now: now) }
+    /// The text label is capped at 292 points below. Measure against the same
+    /// system font so the detail bubble is only offered when the visible label
+    /// really has to elide. This is computed from the model value, therefore an
+    /// edit immediately updates the result.
+    var isThoughtTruncated: Bool {
+        let width = (thought.text as NSString).size(withAttributes: [.font: NSFont.systemFont(ofSize: NSFont.systemFontSize)]).width
+        return width > 292
+    }
     var body: some View {
         Group {
             if editing {
@@ -956,7 +971,13 @@ struct ThoughtChip: View {
             } else {
                 ThoughtBubble(age: age) {
                     HStack(spacing: 6) {
-                        Text(thought.text).lineLimit(3).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true)
+                        // Keep the lane scan-friendly. The complete value remains
+                        // on `thought.text` (and is still exposed to MCP); only
+                        // this visual label is shortened when it cannot fit.
+                        Text(thought.text)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: 292, alignment: .leading)
                         Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(LanesTheme.secondaryText(colorScheme))
                     }
                 }
@@ -974,7 +995,30 @@ struct ThoughtChip: View {
                             .transition(.opacity)
                     }
                 }
-                .frame(maxWidth: 360, alignment: .leading).onHover { hovering = $0 }
+                .overlay(alignment: .bottomLeading) {
+                    if hovering && isThoughtTruncated {
+                        Text(thought.text)
+                            .font(.callout)
+                            .foregroundStyle(.primary)
+                            .multilineTextAlignment(.leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: 340, alignment: .leading)
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 8)
+                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.14)))
+                            .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
+                            .offset(y: 12)
+                            .zIndex(20)
+                            .allowsHitTesting(false)
+                            .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
+                    }
+                }
+                .frame(maxWidth: 360, alignment: .leading)
+                // Lift the whole chip while its detail bubble is visible so it
+                // can sit above adjacent chips in the flow layout.
+                .zIndex(hovering ? 10 : 0)
+                .onHover { hovering = $0 }
                 .pointingHandCursor()
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hovering)
                 .onTapGesture { selectedThoughtID = thought.id; focus = .thought(thought.id) }
