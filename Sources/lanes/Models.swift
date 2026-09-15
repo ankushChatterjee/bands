@@ -45,6 +45,17 @@ struct ThoughtAgingSettings: Equatable {
     var isValid: Bool { freshMinutes >= 15 && freshMinutes < warmMinutes && warmMinutes < attentionMinutes && attentionMinutes < oldMinutes }
 }
 
+/// Persistent choices for where newly created content appears. Keeping these
+/// keys outside the view layer also lets captures from the local MCP service
+/// follow the same preference.
+enum InsertionPreferences {
+    static let thoughtsAtEndKey = "insertion.thoughtsAtEnd"
+    static let lanesAtEndKey = "insertion.lanesAtEnd"
+
+    static var thoughtsAtEnd: Bool { UserDefaults.standard.bool(forKey: thoughtsAtEndKey) }
+    static var lanesAtEnd: Bool { UserDefaults.standard.bool(forKey: lanesAtEndKey) }
+}
+
 @MainActor
 final class ThoughtAgingSettingsStore: ObservableObject {
     static let shared = ThoughtAgingSettingsStore()
@@ -122,10 +133,24 @@ enum LaneManagement {
         lane.order = 0
     }
 
+    static func insert(_ lane: Lane, into lanes: [Lane], atEnd: Bool) {
+        guard atEnd else {
+            prepend(lane, to: lanes)
+            return
+        }
+        lane.order = (lanes.map(\.order).max() ?? -1) + 1
+    }
+
     static func capture(_ rawText: String, in lane: Lane?, context: ModelContext, now: Date) throws -> Thought? {
         let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
-        let thought = Thought(text: text, lane: lane, createdAt: now)
+        let existing = try context.fetch(FetchDescriptor<Thought>())
+            .filter { $0.lane?.id == lane?.id && $0.completedAt == nil && $0.releasedAt == nil }
+        let orders = existing.compactMap(\.order)
+        let order = InsertionPreferences.thoughtsAtEnd
+            ? (orders.min() ?? 0) - 1
+            : (orders.max() ?? 0) + 1
+        let thought = Thought(text: text, lane: lane, order: order, createdAt: now)
         context.insert(thought)
         try context.save()
         return thought

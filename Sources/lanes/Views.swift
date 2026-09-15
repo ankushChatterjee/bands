@@ -47,6 +47,14 @@ enum LanesTheme {
         scheme == .dark ? softGray : Color(red: 0.35, green: 0.35, blue: 0.38)
     }
 
+    static func controlFill(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color.white.opacity(0.14) : Color.white.opacity(0.82)
+    }
+
+    static func controlBorder(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color.white.opacity(0.22) : Color.black.opacity(0.12)
+    }
+
     static func chipFill(for age: ThoughtAge, scheme: ColorScheme) -> Color {
         switch age {
         case .fresh: return scheme == .dark ? Color.white.opacity(0.075) : Color.white.opacity(0.84)
@@ -300,8 +308,8 @@ struct RootView: View {
                 Image(systemName: "gearshape")
                     .font(.body.weight(.medium))
                     .frame(width: 30, height: 30)
-                    .background(.primary.opacity(0.08), in: Circle())
-                    .overlay(Circle().strokeBorder(.primary.opacity(0.15)))
+                    .background(LanesTheme.controlFill(colorScheme), in: Circle())
+                    .overlay(Circle().strokeBorder(LanesTheme.controlBorder(colorScheme)))
                     .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
             }
             .buttonStyle(.plain)
@@ -322,7 +330,7 @@ struct RootView: View {
         guard case .valid(let name) = LaneManagement.validateName(newLane, existingNames: lanes.map(\.name)) else { return }
         let lane = Lane(name: name, order: 0)
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.28, extraBounce: 0.08)) {
-            LaneManagement.prepend(lane, to: lanes)
+            LaneManagement.insert(lane, into: lanes, atEnd: InsertionPreferences.lanesAtEnd)
             context.insert(lane)
             try? context.save()
         }
@@ -347,7 +355,11 @@ struct RootView: View {
         guard let next = PanelSelection.nextIndex(current: selectedThoughtID.flatMap { id in thoughts.firstIndex { $0.id == id } }, direction: direction, count: thoughts.count) else { return }
         selectedThoughtID = thoughts[next].id; focus = .thought(thoughts[next].id)
     }
-    private func laneThoughts(_ lane: Lane) -> [Thought] { (try? context.fetch(FetchDescriptor<Thought>(sortBy: [SortDescriptor(\Thought.createdAt, order: .reverse)])))?.filter { $0.lane?.id == lane.id && $0.completedAt == nil && $0.releasedAt == nil } ?? [] }
+    private func laneThoughts(_ lane: Lane) -> [Thought] {
+        ((try? context.fetch(FetchDescriptor<Thought>())) ?? [])
+            .filter { $0.lane?.id == lane.id && $0.completedAt == nil && $0.releasedAt == nil }
+            .sorted { ($0.order ?? 0, $0.createdAt) > ($1.order ?? 0, $1.createdAt) }
+    }
     private func completeSelected() { guard case .thought = focus, let id = selectedThoughtID, let thought = (try? context.fetch(FetchDescriptor<Thought>()))?.first(where: { $0.id == id }) else { return }; ThoughtManagement.complete(thought, now: .now); try? context.save(); selectedThoughtID = nil; focus = nil }
     private func deleteLane(_ lane: Lane) { let thoughts = (try? context.fetch(FetchDescriptor<Thought>())) ?? []; thoughts.filter { $0.lane?.id == lane.id }.forEach(context.delete); context.delete(lane); try? context.save() }
     private func dropLaneOnBin(_ providers: [NSItemProvider]) -> Bool {
@@ -374,6 +386,7 @@ private enum MCPSettings {
 /// view only persists and communicates the user's preference.
 private struct MCPControl: View {
     @AppStorage(MCPSettings.enabledKey) private var enabled = true
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         Button { enabled.toggle() } label: {
@@ -384,6 +397,9 @@ private struct MCPControl: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
+        .background(LanesTheme.controlFill(colorScheme), in: Capsule(style: .continuous))
+        .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
+        .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
         .contentShape(Rectangle())
         .pointingHandCursor()
         .accessibilityLabel("MCP connection")
@@ -447,6 +463,8 @@ struct LanesPanelBackground: View {
 
 struct SettingsView: View {
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
+    @AppStorage(InsertionPreferences.thoughtsAtEndKey) private var thoughtsAtEnd = false
+    @AppStorage(InsertionPreferences.lanesAtEndKey) private var lanesAtEnd = false
     @EnvironmentObject private var agingStore: ThoughtAgingSettingsStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
@@ -466,7 +484,8 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 14) {
             SettingsSection(title: "Appearance") {
                 LabeledContent("Theme") {
                     Picker("Theme", selection: $appearance) {
@@ -482,6 +501,34 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(LanesTheme.secondaryText(colorScheme))
                     .padding(.top, 5)
+            }
+            Divider()
+            SettingsSection(title: "New items") {
+                HStack {
+                    Text("New thoughts")
+                    Spacer()
+                    Picker("Thought placement", selection: $thoughtsAtEnd) {
+                        Text("Start").tag(false)
+                        Text("End").tag(true)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 138)
+                }
+                .padding(.vertical, 4)
+                Divider()
+                HStack {
+                    Text("New lanes")
+                    Spacer()
+                    Picker("Lane placement", selection: $lanesAtEnd) {
+                        Text("Top").tag(false)
+                        Text("Bottom").tag(true)
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 138)
+                }
+                .padding(.vertical, 4)
             }
             Divider()
             SettingsSection(title: "Keyboard shortcuts") {
@@ -529,8 +576,12 @@ struct SettingsView: View {
                 }
                 .padding(.top, 8)
             }
+            }
+            .padding(18)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(ThinScrollbarConfigurator())
         }
-        .padding(18)
+        .scrollIndicators(.visible)
         .frame(width: 460, height: 458, alignment: .topLeading)
         .background(LanesTheme.panel(colorScheme))
         .onAppear {
@@ -544,6 +595,26 @@ struct SettingsView: View {
     private func setDraft(_ settings: ThoughtAgingSettings) {
         fresh = settings.freshMinutes; warm = settings.warmMinutes
         attention = settings.attentionMinutes; old = settings.oldMinutes
+    }
+}
+
+private struct ThinScrollbarConfigurator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async {
+            var ancestor: NSView? = view
+            while let current = ancestor {
+                if let scrollView = current as? NSScrollView {
+                    scrollView.hasVerticalScroller = true
+                    scrollView.autohidesScrollers = true
+                    scrollView.scrollerStyle = .overlay
+                    scrollView.verticalScroller?.controlSize = .small
+                    return
+                }
+                ancestor = current.superview
+            }
+        }
     }
 }
 
@@ -616,12 +687,17 @@ struct LaneRow: View {
     @Binding var draggingLaneID: UUID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
+    @AppStorage(InsertionPreferences.thoughtsAtEndKey) private var thoughtsAtEnd = false
     let onDelete: (Lane) -> Void
     let onMoveLane: (Lane, Lane) -> Void
     @State private var adding = false; @State private var input = ""; @State private var editing = false; @State private var name = ""; @State private var showingDeleteConfirmation = false; @State private var hoveringAdd = false; @State private var hoveringLane = false; @State private var dropTargeted = false; @State private var thoughtFrames: [UUID: CGRect] = [:]
     @State private var insertionIndex: Int?
     @State private var laneDropAfter = false
-    var thoughts: [Thought] { allThoughts.filter { $0.lane?.id == lane.id && $0.completedAt == nil && $0.releasedAt == nil } }
+    var thoughts: [Thought] {
+        allThoughts
+            .filter { $0.lane?.id == lane.id && $0.completedAt == nil && $0.releasedAt == nil }
+            .sorted { ($0.order ?? 0, $0.createdAt) > ($1.order ?? 0, $1.createdAt) }
+    }
     var body: some View {
         FlowLayout {
             HStack(spacing: 0) {
@@ -659,45 +735,7 @@ struct LaneRow: View {
             .focusEffectDisabled()
             .accessibilityLabel("Lane \(lane.name)")
             .accessibilityHint("Double-click or use the context menu to rename")
-            if adding {
-                ThoughtBubble {
-                    HStack(spacing: 6) {
-                        TextField("", text: $input,
-                                  prompt: Text("Add thought").foregroundStyle(LanesTheme.secondaryText(colorScheme)))
-                            .textFieldStyle(.plain)
-                            .frame(minWidth: 112)
-                            .focused($focus, equals: .laneInput(lane.id))
-                            .onSubmit { addThought() }
-                            .onExitCommand { cancelAdd() }
-                            .accessibilityLabel("New thought in \(lane.name)")
-                            .accessibilityHint("Press Return to save, or Escape to cancel")
-                        Image(systemName: "return")
-                            .font(.caption2.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                            .accessibilityHidden(true)
-                    }
-                }
-            } else {
-                Button {
-                    adding = true
-                    focus = .laneInput(lane.id)
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.body.weight(.medium))
-                        .frame(width: 22, height: 22)
-                        // The SF Symbol's optical center sits slightly above
-                        // the center of its line box; nudge only the glyph so
-                        // the button remains centered with the lane pill.
-                        .offset(y: 1)
-                        .background(hoveringAdd ? Color.primary.opacity(0.12) : .clear, in: Circle())
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(hoveringAdd ? .primary : LanesTheme.secondaryText(colorScheme))
-                .onHover { hoveringAdd = $0 }
-                .animation(.easeOut(duration: 0.14), value: hoveringAdd)
-                .pointingHandCursor()
-                .accessibilityLabel("Add thought to \(lane.name)")
-            }
+            if !thoughtsAtEnd { thoughtAdditionControl }
             ForEach(Array(thoughts.enumerated()), id: \.element.id) { index, thought in
                 if dropTargeted && insertionIndex == index {
                     ThoughtInsertionIndicator()
@@ -707,6 +745,7 @@ struct LaneRow: View {
             if dropTargeted && insertionIndex == thoughts.count {
                 ThoughtInsertionIndicator()
             }
+            if thoughtsAtEnd { thoughtAdditionControl }
         }
         .padding(.vertical, 8)
         .padding(.horizontal, dropTargeted ? 5 : 0)
@@ -766,7 +805,55 @@ struct LaneRow: View {
     private func cancelRename() { editing = false; name = ""; focus = nil }
     private func saveName() { guard case .valid(let value) = LaneManagement.validateName(name, existingNames: lanes.map(\.name), excluding: lane.name) else { return }; lane.name = value; try? context.save(); cancelRename() }
     private func cancelAdd() { adding = false; input = ""; focus = nil }
-    private func addThought() { let value = input.trimmingCharacters(in: .whitespacesAndNewlines); guard !value.isEmpty else { return }; let nextOrder = (thoughts.compactMap(\.order).max() ?? 0) + 1; context.insert(Thought(text: value, lane: lane, order: nextOrder)); try? context.save(); cancelAdd() }
+    @ViewBuilder private var thoughtAdditionControl: some View {
+        if adding {
+            ThoughtBubble {
+                HStack(spacing: 6) {
+                    TextField("", text: $input,
+                              prompt: Text("Add thought").foregroundStyle(LanesTheme.secondaryText(colorScheme)))
+                        .textFieldStyle(.plain)
+                        .frame(minWidth: 112)
+                        .focused($focus, equals: .laneInput(lane.id))
+                        .onSubmit { addThought() }
+                        .onExitCommand { cancelAdd() }
+                        .accessibilityLabel("New thought in \(lane.name)")
+                        .accessibilityHint("Press Return to save, or Escape to cancel")
+                    Image(systemName: "return")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+            }
+        } else {
+            Button {
+                adding = true
+                focus = .laneInput(lane.id)
+            } label: {
+                Image(systemName: "plus")
+                    .font(.body.weight(.medium))
+                    .frame(width: 22, height: 22)
+                    .offset(y: 1)
+                    .background(hoveringAdd ? Color.primary.opacity(0.12) : .clear, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(hoveringAdd ? .primary : LanesTheme.secondaryText(colorScheme))
+            .onHover { hoveringAdd = $0 }
+            .animation(.easeOut(duration: 0.14), value: hoveringAdd)
+            .pointingHandCursor()
+            .accessibilityLabel("Add thought to \(lane.name)")
+        }
+    }
+    private func addThought() {
+        let value = input.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
+        let orders = thoughts.compactMap(\.order)
+        let order = InsertionPreferences.thoughtsAtEnd
+            ? (orders.min() ?? 0) - 1
+            : (orders.max() ?? 0) + 1
+        context.insert(Thought(text: value, lane: lane, order: order))
+        try? context.save()
+        cancelAdd()
+    }
     private func handleDrop(raw: String, at location: CGPoint) -> Bool {
         guard let sourceID = UUID(uuidString: raw) else { return false }
         if let source = lanes.first(where: { $0.id == sourceID }) {

@@ -80,6 +80,16 @@ final class LaneManagementTests: XCTestCase {
         XCTAssertEqual(second.order, 2)
     }
 
+    func testAppendingLanePlacesItLast() {
+        let first = Lane(name: "First", order: 0)
+        let second = Lane(name: "Second", order: 1)
+        let newLane = Lane(name: "New", order: 99)
+        LaneManagement.insert(newLane, into: [first, second], atEnd: true)
+        XCTAssertEqual(newLane.order, 2)
+        XCTAssertEqual(first.order, 0)
+        XCTAssertEqual(second.order, 1)
+    }
+
     func testReorderingPersistsOrder() throws {
         let context = try makeContext()
         let lanes = [Lane(name: "A", order: 0), Lane(name: "B", order: 1), Lane(name: "C", order: 2)]
