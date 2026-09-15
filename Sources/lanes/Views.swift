@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 import SwiftData
 import UniformTypeIdentifiers
 import AppKit
@@ -191,6 +192,8 @@ struct RootView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
+    @State private var timestampRefreshDate = Date.now
+    private let timestampRefreshTimer = Timer.publish(every: 5 * 60, on: .main, in: .common).autoconnect()
 
     enum PanelFocus: Hashable { case newLane, laneInput(UUID), laneRename(UUID), thought(UUID), thoughtEdit(UUID) }
 
@@ -203,7 +206,7 @@ struct RootView: View {
                             .frame(maxWidth: .infinity, minHeight: 180)
                     } else {
                         ForEach(lanes) { lane in
-                            LaneRow(lane: lane, lanes: lanes, selectedThoughtID: $selectedThoughtID, focus: $focus, draggingLaneID: $draggingLaneID, onDelete: deleteLane, onMoveLane: moveLane)
+                            LaneRow(lane: lane, lanes: lanes, now: timestampRefreshDate, selectedThoughtID: $selectedThoughtID, focus: $focus, draggingLaneID: $draggingLaneID, onDelete: deleteLane, onMoveLane: moveLane)
                                 .transition(reduceMotion ? .identity : .move(edge: .top).combined(with: .opacity))
                             if lane.id != lanes.last?.id { Divider() }
                         }
@@ -246,9 +249,14 @@ struct RootView: View {
             .onAppear {
                 focus = nil
                 AppAppearance.apply(appearance)
+                timestampRefreshDate = .now
             }
             .onChange(of: appearance) { _, value in AppAppearance.apply(value) }
-            .onReceive(NotificationCenter.default.publisher(for: .lanesPanelDidOpen)) { _ in focus = nil }
+            .onReceive(NotificationCenter.default.publisher(for: .lanesPanelDidOpen)) { _ in
+                focus = nil
+                timestampRefreshDate = .now
+            }
+            .onReceive(timestampRefreshTimer) { timestampRefreshDate = $0 }
             .onExitCommand { NSApp.keyWindow?.orderOut(nil) }
             .onMoveCommand { direction in
                 switch direction {
@@ -691,6 +699,7 @@ struct LaneRow: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(InsertionPreferences.thoughtsAtEndKey) private var thoughtsAtEnd = false
     let onDelete: (Lane) -> Void
+    let now: Date
     let onMoveLane: (Lane, Lane) -> Void
     @State private var adding = false; @State private var input = ""; @State private var editing = false; @State private var name = ""; @State private var showingDeleteConfirmation = false; @State private var hoveringAdd = false; @State private var hoveringLane = false; @State private var dropTargeted = false; @State private var thoughtFrames: [UUID: CGRect] = [:]
     @State private var insertionIndex: Int?
@@ -742,7 +751,7 @@ struct LaneRow: View {
                 if dropTargeted && insertionIndex == index {
                     ThoughtInsertionIndicator()
                 }
-                ThoughtChip(thought: thought, laneID: lane.id, selectedThoughtID: $selectedThoughtID, focus: $focus)
+                ThoughtChip(thought: thought, laneID: lane.id, now: now, selectedThoughtID: $selectedThoughtID, focus: $focus)
             }
             if dropTargeted && insertionIndex == thoughts.count {
                 ThoughtInsertionIndicator()
@@ -928,11 +937,12 @@ struct ThoughtChip: View {
     @EnvironmentObject private var agingStore: ThoughtAgingSettingsStore
     @Bindable var thought: Thought
     let laneID: UUID
+    let now: Date
     @Binding var selectedThoughtID: UUID?
     @FocusState.Binding var focus: RootView.PanelFocus?
     @State private var editing = false; @State private var draft = ""; @State private var hovering = false
-    var age: ThoughtAge { ThoughtAging.age(for: thought, settings: agingStore.settings) }
-    var timestamp: String { ThoughtTimestamp.label(since: thought.createdAt) }
+    var age: ThoughtAge { ThoughtAging.age(for: thought, settings: agingStore.settings, now: now) }
+    var timestamp: String { ThoughtTimestamp.label(since: thought.createdAt, now: now) }
     var body: some View {
         Group {
             if editing {
@@ -981,7 +991,7 @@ struct ThoughtChip: View {
         }
         .contextMenu { Button("Complete") { complete() }; Button("Edit") { beginEdit() }; Menu("Move to…") { ForEach(fetchLanes()) { lane in Button(lane.name) { move(to: lane) } } }; Divider(); Button("Let Go") { letGo() } }.accessibilityElement(children: .ignore).accessibilityLabel("\(thought.text)").accessibilityValue("Added \(timestamp) ago. \(age == .fresh ? "Fresh" : "Aging: \(ageLabel)")").accessibilityHint("Press Return to edit, or Command-Return to complete").accessibilityAction(named: "Edit") { beginEdit() }.accessibilityAction(named: "Complete") { complete() }
     }
-    private var ageLabel: String { ThoughtAging.label(for: thought, settings: agingStore.settings).map { "\($0) old" } ?? "fresh" }
+    private var ageLabel: String { ThoughtAging.label(for: thought, settings: agingStore.settings, now: now).map { "\($0) old" } ?? "fresh" }
     private func beginEdit() { selectedThoughtID = thought.id; draft = thought.text; editing = true; focus = .thoughtEdit(thought.id) }
     private func cancelEdit() { editing = false; draft = ""; focus = .thought(thought.id) }
     private func complete() { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { ThoughtManagement.complete(thought, now: .now); try? context.save() }; selectedThoughtID = nil; focus = nil }
