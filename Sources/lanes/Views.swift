@@ -355,23 +355,17 @@ private struct MCPControl: View {
     @AppStorage(MCPSettings.enabledKey) private var enabled = true
 
     var body: some View {
-        HStack(spacing: 7) {
-            Label("MCP", systemImage: "point.3.connected.trianglepath.dotted")
-                .font(.caption.weight(.medium))
-                .foregroundStyle(.secondary)
-
-            Toggle("MCP connection", isOn: $enabled)
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .tint(LanesTheme.graphite)
+        Button { enabled.toggle() } label: {
+            Text("MCP")
+                .font(.caption.weight(enabled ? .bold : .regular))
+                .opacity(enabled ? 0.9 : 0.35)
         }
-        .padding(.leading, 9)
-        .padding(.trailing, 7)
+        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
         .padding(.vertical, 6)
-        .background(.primary.opacity(0.06), in: Capsule(style: .continuous))
-        .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.10)))
-        .accessibilityElement(children: .contain)
+        .contentShape(Rectangle())
+        .accessibilityLabel("MCP connection")
+        .accessibilityValue(enabled ? "On" : "Off")
         .accessibilityHint("Toggle MCP access to your lanes and thoughts")
         .onAppear {
             UserDefaults.standard.register(defaults: [MCPSettings.enabledKey: true])
