@@ -324,7 +324,6 @@ struct RootView: View {
                     .accessibilityLabel("Delete lane")
                     .accessibilityHint("Drop the dragged lane here to delete it")
             }
-            MCPControl()
             Button(action: openSettings) {
                 Image(systemName: "gearshape")
                     .font(.body.weight(.medium))
@@ -402,29 +401,17 @@ private enum MCPSettings {
     static let enabledKey = "mcpEnabled"
 }
 
-/// The MCP switch lives on the panel so its availability is visible without
-/// opening Settings. The connection itself is owned by the app layer; this
-/// view only persists and communicates the user's preference.
+/// The connection itself is owned by the app layer; this view only persists
+/// and communicates the user's preference.
 private struct MCPControl: View {
     @AppStorage(MCPSettings.enabledKey) private var enabled = true
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        Button { enabled.toggle() } label: {
-            Text("MCP")
-                .font(.caption.weight(enabled ? .bold : .regular))
-                .opacity(enabled ? 0.9 : 0.35)
-        }
-        .buttonStyle(.plain)
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .background(LanesTheme.controlFill(colorScheme), in: Capsule(style: .continuous))
-        .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
-        .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
-        .contentShape(Rectangle())
+        Toggle("", isOn: $enabled)
+            .labelsHidden()
+            .toggleStyle(.switch)
         .pointingHandCursor()
         .accessibilityLabel("MCP connection")
-        .accessibilityValue(enabled ? "On" : "Off")
         .accessibilityHint("Toggle MCP access to your lanes and thoughts")
         .onAppear {
             UserDefaults.standard.register(defaults: [MCPSettings.enabledKey: true])
@@ -547,14 +534,6 @@ struct SettingsView: View {
                 .padding(.vertical, 4)
             }
             Divider()
-            SettingsSection(title: "Keyboard shortcuts") {
-                ShortcutRow(title: "Capture a thought", shortcut: "⌘N")
-                Divider()
-                ShortcutRow(title: "New lane", shortcut: "⇧⌘N")
-                Divider()
-                ShortcutRow(title: "Complete selected thought", shortcut: "⌘↩")
-            }
-            Divider()
             SettingsSection(title: "Thought aging") {
                 Text("Set when a thought begins to draw attention.")
                     .font(.caption)
@@ -572,25 +551,40 @@ struct SettingsView: View {
                         .font(.caption).foregroundStyle(.red)
                         .padding(.top, 7)
                 }
-                HStack {
-                    Button("Restore Defaults") { setDraft(.defaults) }
-                        .pointingHandCursor()
-                    Spacer()
-                    Button("Cancel", role: .cancel) {
-                        appearance = initialAppearance
-                        AppAppearance.apply(initialAppearance)
-                        dismiss()
-                    }
+            }
+            Divider()
+            HStack {
+                Text("MCP")
+                Spacer()
+                MCPControl()
+            }
+            .padding(.vertical, 4)
+            Divider()
+            SettingsSection(title: "Keyboard shortcuts") {
+                ShortcutRow(title: "Capture a thought", shortcut: "⌘N")
+                Divider()
+                ShortcutRow(title: "New lane", shortcut: "⇧⌘N")
+                Divider()
+                ShortcutRow(title: "Complete selected thought", shortcut: "⌘↩")
+            }
+            Divider()
+            HStack {
+                Button("Restore Defaults") { setDraft(.defaults) }
                     .pointingHandCursor()
-                    Button("Apply") {
-                        agingStore.update(draft)
-                        dismiss()
-                    }
-                        .disabled(validationMessage != nil)
-                        .keyboardShortcut(.defaultAction)
-                        .pointingHandCursor()
+                Spacer()
+                Button("Cancel", role: .cancel) {
+                    appearance = initialAppearance
+                    AppAppearance.apply(initialAppearance)
+                    dismiss()
                 }
-                .padding(.top, 8)
+                .pointingHandCursor()
+                Button("Apply") {
+                    agingStore.update(draft)
+                    dismiss()
+                }
+                    .disabled(validationMessage != nil)
+                    .keyboardShortcut(.defaultAction)
+                    .pointingHandCursor()
             }
             }
             .padding(18)
