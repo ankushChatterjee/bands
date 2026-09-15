@@ -33,6 +33,15 @@ private enum LanesStatusIcon {
     }
 }
 
+private enum LanesStatusMenu {
+    static func make(target: AnyObject) -> NSMenu {
+        let menu = NSMenu()
+        menu.addItem(withTitle: "Quit lanes", action: #selector(AppDelegate.quit), keyEquivalent: "q")
+        menu.items[0].target = target
+        return menu
+    }
+}
+
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
@@ -53,18 +62,32 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         controller = PanelController(container: container)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.image = LanesStatusIcon.make()
-        statusItem.button?.toolTip = "lanes"
-        statusItem.button?.target = self
-        statusItem.button?.action = #selector(togglePanel)
-        controller.attach(to: statusItem.button)
+        if let button = statusItem.button {
+            button.image = LanesStatusIcon.make()
+            button.toolTip = "lanes"
+            button.target = self
+            button.action = #selector(statusItemClicked)
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            controller.attach(to: button)
+        }
         globalCaptureShortcut = GlobalCaptureShortcutController { [weak self] in
             self?.controller.show()
         }
         _ = globalCaptureShortcut.register()
     }
 
-    @objc private func togglePanel() { controller.toggle() }
+    @objc private func statusItemClicked() {
+        guard let button = statusItem.button else { return }
+        if NSApp.currentEvent?.type == .rightMouseUp {
+            LanesStatusMenu.make(target: self).popUp(positioning: nil,
+                                                      at: NSPoint(x: button.bounds.midX, y: button.bounds.minY),
+                                                      in: button)
+        } else {
+            controller.toggle()
+        }
+    }
+
+    @objc fileprivate func quit() { NSApp.terminate(self) }
 
     func applicationWillTerminate(_ notification: Notification) {
         globalCaptureShortcut?.unregister()
