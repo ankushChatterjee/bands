@@ -1,6 +1,25 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import AppKit
+
+private struct PointingHandCursorModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content.onHover { isHovering in
+            if isHovering {
+                NSCursor.pointingHand.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+    }
+}
+
+private extension View {
+    func pointingHandCursor() -> some View {
+        modifier(PointingHandCursorModifier())
+    }
+}
 
 /// The neutral system is the visual default. Colour is deliberately reserved for
 /// status: a thought only becomes colourful when its age needs attention.
@@ -259,6 +278,7 @@ struct RootView: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(LanesTheme.laneText(colorScheme))
+                .pointingHandCursor()
                 .accessibilityLabel("Create lane")
             } else {
                 Image(systemName: "trash")
@@ -286,6 +306,7 @@ struct RootView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(.secondary)
+            .pointingHandCursor()
             .accessibilityLabel("Open Settings")
             .help("Settings")
         }
@@ -364,6 +385,7 @@ private struct MCPControl: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 6)
         .contentShape(Rectangle())
+        .pointingHandCursor()
         .accessibilityLabel("MCP connection")
         .accessibilityValue(enabled ? "On" : "Off")
         .accessibilityHint("Toggle MCP access to your lanes and thoughts")
@@ -382,7 +404,9 @@ struct EmptyLanesView: View {
             Text("No lanes yet").font(.headline)
             Text("Create a lane to give your thoughts a place to land.")
                 .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Button("Create lane", action: onCreate).buttonStyle(.bordered)
+            Button("Create lane", action: onCreate)
+                .buttonStyle(.bordered)
+                .pointingHandCursor()
         }.frame(maxWidth: 300).accessibilityElement(children: .combine)
     }
 }
@@ -484,25 +508,24 @@ struct SettingsView: View {
                     Label(validationMessage, systemImage: "exclamationmark.triangle")
                         .font(.caption).foregroundStyle(.red)
                         .padding(.top, 7)
-                } else {
-                    Text("Below Warm stays visually calm; age labels begin at Warm.")
-                        .font(.caption).foregroundStyle(LanesTheme.secondaryText(colorScheme))
-                        .padding(.top, 7)
                 }
                 HStack {
                     Button("Restore Defaults") { setDraft(.defaults) }
+                        .pointingHandCursor()
                     Spacer()
                     Button("Cancel", role: .cancel) {
                         appearance = initialAppearance
                         AppAppearance.apply(initialAppearance)
                         dismiss()
                     }
+                    .pointingHandCursor()
                     Button("Apply") {
                         agingStore.update(draft)
                         dismiss()
                     }
                         .disabled(validationMessage != nil)
                         .keyboardShortcut(.defaultAction)
+                        .pointingHandCursor()
                 }
                 .padding(.top, 8)
             }
@@ -622,6 +645,7 @@ struct LaneRow: View {
             .background(LanesTheme.laneFill(colorScheme), in: RoundedRectangle(cornerRadius: Self.lanePillCornerRadius, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: Self.lanePillCornerRadius, style: .continuous).strokeBorder(.black.opacity(0.10)))
             .onHover { hoveringLane = $0 }
+            .pointingHandCursor()
             .rotationEffect(.degrees(hoveringLane && !editing ? -2 : 0), anchor: .center)
             .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.58), value: hoveringLane)
             // Keep the lane drag source on the name pill only. The row below is
@@ -671,6 +695,7 @@ struct LaneRow: View {
                 .foregroundStyle(hoveringAdd ? .primary : LanesTheme.secondaryText(colorScheme))
                 .onHover { hoveringAdd = $0 }
                 .animation(.easeOut(duration: 0.14), value: hoveringAdd)
+                .pointingHandCursor()
                 .accessibilityLabel("Add thought to \(lane.name)")
             }
             ForEach(Array(thoughts.enumerated()), id: \.element.id) { index, thought in
@@ -833,7 +858,7 @@ struct ThoughtChip: View {
                     }
                 }
                 .overlay(alignment: .trailing) {
-                    if hovering || focus == .thought(thought.id) {
+                    if hovering {
                         Button(action: complete) { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
                             .buttonStyle(.plain)
                             .foregroundStyle(.primary)
@@ -841,11 +866,13 @@ struct ThoughtChip: View {
                             .background(.regularMaterial, in: Circle())
                             .overlay(Circle().strokeBorder(.primary.opacity(0.12)))
                             .offset(x: 8)
+                            .pointingHandCursor()
                             .accessibilityLabel("Complete thought")
                             .transition(.opacity)
                     }
                 }
                 .frame(maxWidth: 360, alignment: .leading).onHover { hovering = $0 }
+                .pointingHandCursor()
                 .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hovering)
                 .onTapGesture { selectedThoughtID = thought.id; focus = .thought(thought.id) }
                 .draggable(thought.id.uuidString) {
