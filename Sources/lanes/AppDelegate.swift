@@ -39,11 +39,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var controller: PanelController!
     private var globalCaptureShortcut: GlobalCaptureShortcutController!
     private var container: ModelContainer!
+    private var mcpBridge: LanesMCPBridge!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
         do { container = try ModelContainer(for: Lane.self, Thought.self) }
         catch { fatalError("Unable to create local store: \(error)") }
+        let defaults = UserDefaults.standard
+        if defaults.object(forKey: "mcpEnabled") == nil { defaults.set(true, forKey: "mcpEnabled") }
+        if defaults.bool(forKey: "mcpEnabled") {
+            mcpBridge = LanesMCPBridge(service: LanesCommandService(container: container))
+            mcpBridge.start()
+        }
         controller = PanelController(container: container)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.button?.image = LanesStatusIcon.make()
@@ -61,5 +68,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         globalCaptureShortcut?.unregister()
+        mcpBridge?.stop()
     }
 }

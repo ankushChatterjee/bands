@@ -275,6 +275,7 @@ struct RootView: View {
                     .accessibilityLabel("Delete lane")
                     .accessibilityHint("Drop the dragged lane here to delete it")
             }
+            MCPControl()
             Button(action: openSettings) {
                 Image(systemName: "gearshape")
                     .font(.body.weight(.medium))
@@ -340,6 +341,41 @@ struct RootView: View {
             }
         }
         return true
+    }
+}
+
+private enum MCPSettings {
+    static let enabledKey = "mcpEnabled"
+}
+
+/// The MCP switch lives on the panel so its availability is visible without
+/// opening Settings. The connection itself is owned by the app layer; this
+/// view only persists and communicates the user's preference.
+private struct MCPControl: View {
+    @AppStorage(MCPSettings.enabledKey) private var enabled = true
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Label("MCP", systemImage: "point.3.connected.trianglepath.dotted")
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.secondary)
+
+            Toggle("MCP connection", isOn: $enabled)
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .tint(LanesTheme.graphite)
+        }
+        .padding(.leading, 9)
+        .padding(.trailing, 7)
+        .padding(.vertical, 6)
+        .background(.primary.opacity(0.06), in: Capsule(style: .continuous))
+        .overlay(Capsule(style: .continuous).strokeBorder(.primary.opacity(0.10)))
+        .accessibilityElement(children: .contain)
+        .accessibilityHint("Toggle MCP access to your lanes and thoughts")
+        .onAppear {
+            UserDefaults.standard.register(defaults: [MCPSettings.enabledKey: true])
+        }
     }
 }
 
