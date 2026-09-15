@@ -667,6 +667,10 @@ struct LaneRow: View {
                     Image(systemName: "plus")
                         .font(.body.weight(.medium))
                         .frame(width: 22, height: 22)
+                        // The SF Symbol's optical center sits slightly above
+                        // the center of its line box; nudge only the glyph so
+                        // the button remains centered with the lane pill.
+                        .offset(y: 1)
                         .background(hoveringAdd ? Color.primary.opacity(0.12) : .clear, in: Circle())
                 }
                 .buttonStyle(.plain)
