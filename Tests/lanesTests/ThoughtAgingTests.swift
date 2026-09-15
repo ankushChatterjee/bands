@@ -62,6 +62,40 @@ final class ThoughtAgingTests: XCTestCase {
         XCTAssertNil(ThoughtAging.label(for: thought, now: now))
     }
 
+    func testNotificationPlannerUsesAgingResetAndOnlyFutureTransitions() {
+        let settings = ThoughtAgingSettings.defaults
+        let reset = now
+        let thought = Thought(text: "Reminder", createdAt: now.addingTimeInterval(-2 * ThoughtAging.day))
+        thought.agingResetAt = reset
+        let events = ThoughtNotificationPlanner.events(for: thought, settings: settings, now: now)
+        XCTAssertEqual(events.map(\.age), [.warm, .attention, .old])
+        XCTAssertEqual(events.map(\.date), [reset.addingTimeInterval(300 * 60), reset.addingTimeInterval(720 * 60), reset.addingTimeInterval(1_440 * 60)])
+    }
+
+    func testNotificationPlannerSkipsCompletedReleasedAndPastTransitions() {
+        let thought = Thought(text: "Done", createdAt: now.addingTimeInterval(-2 * ThoughtAging.day))
+        XCTAssertTrue(ThoughtNotificationPlanner.events(for: thought, settings: .defaults, now: now).isEmpty)
+        thought.completedAt = now
+        XCTAssertTrue(ThoughtNotificationPlanner.events(for: thought, settings: .defaults, now: now).isEmpty)
+        thought.completedAt = nil
+        thought.releasedAt = now
+        XCTAssertTrue(ThoughtNotificationPlanner.events(for: thought, settings: .defaults, now: now).isEmpty)
+    }
+
+    func testResetAgingMakesAnOldThoughtFreshWithoutChangingCreationTimestamp() {
+        let created = now.addingTimeInterval(-2 * ThoughtAging.day)
+        let thought = Thought(text: "Reset me", createdAt: created)
+        XCTAssertEqual(ThoughtAging.age(for: thought, now: now), .old)
+
+        let reset = now.addingTimeInterval(-30 * ThoughtAging.hour / 60)
+        ThoughtManagement.resetAging(thought, now: reset)
+
+        XCTAssertEqual(thought.createdAt, created)
+        XCTAssertEqual(thought.agingResetAt, reset)
+        XCTAssertEqual(ThoughtAging.age(for: thought, now: now), .fresh)
+        XCTAssertNil(ThoughtAging.label(for: thought, now: now))
+    }
+
     func testTimestampUsesRoundedMinutesThenHoursAndMinutes() {
         XCTAssertEqual(ThoughtTimestamp.label(since: now.addingTimeInterval(-45), now: now), "now")
         XCTAssertEqual(ThoughtTimestamp.label(since: now.addingTimeInterval(-60), now: now), "1m")

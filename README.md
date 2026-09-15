@@ -65,7 +65,7 @@ Notarization is the supported way to avoid separate DMG and app warnings. A loca
 Apple Development signature can still produce Gatekeeper warnings on both the DMG
 and the app, and cannot reliably be reduced to exactly one warning by DMG layout.
 
-The app uses SwiftUI for its panel, AppKit for the status item/panel, and SwiftData for the on-device store. It has no network, account, telemetry, notification, voice, or AI code.
+The app uses SwiftUI for its panel, AppKit for the status item/panel and local macOS notifications, and SwiftData for the on-device store. It has no network, account, telemetry, voice, or AI code.
 
 ## V1 interaction
 

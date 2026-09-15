@@ -85,10 +85,10 @@ final class LanesCommandService {
     }
     private func edit(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] {
         guard let text = arguments["text"] as? String else { throw BridgeError(message: "text is required") }; let item = try thought(context, id: id(arguments))
-        guard ThoughtManagement.edit(item, rawText: text, now: .now) else { throw BridgeError(message: "text cannot be empty") }; try context.save(); return ["thought": thoughtJSON(item)]
+        guard ThoughtManagement.edit(item, rawText: text, now: .now) else { throw BridgeError(message: "text cannot be empty") }; try context.save(); LanesNotificationBus.thoughtChanged(item.id); return ["thought": thoughtJSON(item)]
     }
     private func move(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] { let item = try thought(context, id: id(arguments)); guard let raw = arguments["laneId"] as? String, let laneID = UUID(uuidString: raw) else { throw BridgeError(message: "laneId is required") }; guard ThoughtManagement.move(item, to: try lane(context, id: laneID), now: .now) else { throw BridgeError(message: "Thought is already in that lane") }; try context.save(); return ["thought": thoughtJSON(item)] }
-    private func mark(context: ModelContext, arguments: [String: Any], release: Bool) throws -> [String: Any] { let item = try thought(context, id: id(arguments)); if release { ThoughtManagement.letGo(item, now: .now) } else { ThoughtManagement.complete(item, now: .now) }; try context.save(); return ["thought": thoughtJSON(item)] }
+    private func mark(context: ModelContext, arguments: [String: Any], release: Bool) throws -> [String: Any] { let item = try thought(context, id: id(arguments)); if release { ThoughtManagement.letGo(item, now: .now) } else { ThoughtManagement.complete(item, now: .now) }; try context.save(); LanesNotificationBus.thoughtChanged(item.id); return ["thought": thoughtJSON(item)] }
 }
 
 private enum PriorityLevel: String {

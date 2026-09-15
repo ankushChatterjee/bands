@@ -49,6 +49,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var globalCaptureShortcut: GlobalCaptureShortcutController!
     private var container: ModelContainer!
     private var mcpBridge: LanesMCPBridge!
+    private var notificationCoordinator: LanesNotificationCoordinator!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -61,6 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             mcpBridge.start()
         }
         controller = PanelController(container: container)
+        notificationCoordinator = LanesNotificationCoordinator(container: container)
+        notificationCoordinator.start()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             button.image = LanesStatusIcon.make()

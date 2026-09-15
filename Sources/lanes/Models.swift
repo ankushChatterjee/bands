@@ -22,13 +22,16 @@ import SwiftData
     var createdAt: Date
     var updatedAt: Date
     var lastTouchedAt: Date
+    // Optional so existing SwiftData stores can migrate without changing
+    // the original creation timestamp shown in the UI.
+    var agingResetAt: Date?
     var completedAt: Date?
     var releasedAt: Date?
     var lane: Lane?
 
     init(id: UUID = UUID(), text: String, lane: Lane? = nil, order: Int? = nil, createdAt: Date = .now) {
         self.id = id; self.text = text; self.order = order; self.lane = lane; self.createdAt = createdAt
-        self.updatedAt = createdAt; self.lastTouchedAt = createdAt
+        self.updatedAt = createdAt; self.lastTouchedAt = createdAt; self.agingResetAt = nil
     }
 }
 
@@ -87,6 +90,7 @@ final class ThoughtAgingSettingsStore: ObservableObject {
         defaults.set(newSettings.warmMinutes, forKey: "aging.warmMinutes")
         defaults.set(newSettings.attentionMinutes, forKey: "aging.attentionMinutes")
         defaults.set(newSettings.oldMinutes, forKey: "aging.oldMinutes")
+        NotificationCenter.default.post(name: .lanesAgingSettingsChanged, object: nil)
     }
 
     func restoreDefaults() { update(.defaults) }
@@ -153,6 +157,7 @@ enum LaneManagement {
         let thought = Thought(text: text, lane: lane, order: order, createdAt: now)
         context.insert(thought)
         try context.save()
+        LanesNotificationBus.thoughtChanged(thought.id)
         return thought
     }
 
@@ -174,6 +179,11 @@ enum ThoughtManagement {
         thought.updatedAt = now
         thought.lastTouchedAt = now
         return true
+    }
+
+    static func resetAging(_ thought: Thought, now: Date) {
+        thought.agingResetAt = now
+        thought.lastTouchedAt = now
     }
 
     static func move(_ thought: Thought, to lane: Lane, now: Date) -> Bool {
@@ -208,8 +218,11 @@ enum ThoughtManagement {
 enum ThoughtAging {
     static let hour: TimeInterval = 3_600
     static let day: TimeInterval = 24 * hour
+    static func referenceDate(for thought: Thought) -> Date {
+        max(thought.createdAt, thought.agingResetAt ?? .distantPast)
+    }
     static func age(for thought: Thought, settings: ThoughtAgingSettings = .defaults, now: Date = .now) -> ThoughtAge {
-        let hours = max(0, now.timeIntervalSince(thought.createdAt) / hour)
+        let hours = max(0, now.timeIntervalSince(referenceDate(for: thought)) / hour)
         let warmHours = Double(settings.warmMinutes) / 60
         let attentionHours = Double(settings.attentionMinutes) / 60
         let oldHours = Double(settings.oldMinutes) / 60
@@ -221,7 +234,7 @@ enum ThoughtAging {
         }
     }
     static func label(for thought: Thought, settings: ThoughtAgingSettings = .defaults, now: Date = .now) -> String? {
-        let elapsed = max(0, now.timeIntervalSince(thought.createdAt))
+        let elapsed = max(0, now.timeIntervalSince(referenceDate(for: thought)))
         guard elapsed >= Double(settings.warmMinutes) * 60 else { return nil }
         if elapsed < day { return "\(max(1, Int(elapsed / hour)))h" }
         if elapsed < 7 * day { return "\(max(1, Int(elapsed / day)))d" }

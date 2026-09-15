@@ -380,8 +380,8 @@ struct RootView: View {
             .filter { $0.lane?.id == lane.id && $0.completedAt == nil && $0.releasedAt == nil }
             .sorted { ($0.order ?? 0, $0.createdAt) > ($1.order ?? 0, $1.createdAt) }
     }
-    private func completeSelected() { guard case .thought = focus, let id = selectedThoughtID, let thought = (try? context.fetch(FetchDescriptor<Thought>()))?.first(where: { $0.id == id }) else { return }; ThoughtManagement.complete(thought, now: .now); try? context.save(); selectedThoughtID = nil; focus = nil }
-    private func deleteLane(_ lane: Lane) { let thoughts = (try? context.fetch(FetchDescriptor<Thought>())) ?? []; thoughts.filter { $0.lane?.id == lane.id }.forEach(context.delete); context.delete(lane); try? context.save() }
+    private func completeSelected() { guard case .thought = focus, let id = selectedThoughtID, let thought = (try? context.fetch(FetchDescriptor<Thought>()))?.first(where: { $0.id == id }) else { return }; ThoughtManagement.complete(thought, now: .now); try? context.save(); LanesNotificationBus.thoughtChanged(thought.id); selectedThoughtID = nil; focus = nil }
+    private func deleteLane(_ lane: Lane) { let thoughts = (try? context.fetch(FetchDescriptor<Thought>())) ?? []; let affected = thoughts.filter { $0.lane?.id == lane.id }.map { $0.id }; thoughts.filter { $0.lane?.id == lane.id }.forEach(context.delete); context.delete(lane); try? context.save(); affected.forEach(LanesNotificationBus.thoughtChanged) }
     private func dropLaneOnBin(_ providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
         provider.loadObject(ofClass: NSString.self) { object, _ in
@@ -466,6 +466,7 @@ struct LanesPanelBackground: View {
 
 struct SettingsView: View {
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
+    @AppStorage(ThoughtNotificationSettings.enabledKey) private var notificationsEnabled = ThoughtNotificationSettings.defaultEnabled
     @AppStorage(InsertionPreferences.thoughtsAtEndKey) private var thoughtsAtEnd = false
     @AppStorage(InsertionPreferences.lanesAtEndKey) private var lanesAtEnd = false
     @EnvironmentObject private var agingStore: ThoughtAgingSettingsStore
@@ -552,6 +553,19 @@ struct SettingsView: View {
                         .padding(.top, 7)
                 }
             }
+            Divider()
+            HStack {
+                Text("Notifications")
+                Spacer()
+                Toggle("Notifications", isOn: $notificationsEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .pointingHandCursor()
+                    .onChange(of: notificationsEnabled) { _, value in
+                        NotificationCenter.default.post(name: .lanesNotificationPreferenceChanged, object: nil, userInfo: ["enabled": value])
+                    }
+            }
+            .padding(.vertical, 4)
             Divider()
             HStack {
                 Text("MCP")
@@ -861,8 +875,10 @@ struct LaneRow: View {
         let order = InsertionPreferences.thoughtsAtEnd
             ? (orders.min() ?? 0) - 1
             : (orders.max() ?? 0) + 1
-        context.insert(Thought(text: value, lane: lane, order: order))
+        let thought = Thought(text: value, lane: lane, order: order)
+        context.insert(thought)
         try? context.save()
+        LanesNotificationBus.thoughtChanged(thought.id)
         cancelAdd()
     }
     private func handleDrop(raw: String, at location: CGPoint) -> Bool {
@@ -952,6 +968,27 @@ struct ThoughtChip: View {
         return width > 292
     }
     var body: some View {
+        chipContent
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: ThoughtFramePreferenceKey.self,
+                                           value: [thought.id: proxy.frame(in: .named(laneID.uuidString))])
+                }
+            }
+            .contextMenu {
+                Button("Edit") { beginEdit() }
+                Button("Reset Aging") { resetAging() }
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("\(thought.text)")
+            .accessibilityValue("Added \(timestamp) ago. \(age == .fresh ? "Fresh" : "Aging: \(ageLabel)")")
+            .accessibilityHint("Press Return to edit, or Command-Return to complete")
+            .accessibilityAction(named: "Edit") { beginEdit() }
+            .accessibilityAction(named: "Reset Aging") { resetAging() }
+    }
+
+    @ViewBuilder
+    private var chipContent: some View {
         Group {
             if editing {
                 TextField("Thought", text: $draft).textFieldStyle(.roundedBorder).frame(maxWidth: 360)
@@ -1020,22 +1057,13 @@ struct ThoughtChip: View {
                 .onKeyPress(.return) { beginEdit(); return .handled }
             }
         }
-        .background {
-            GeometryReader { proxy in
-                Color.clear.preference(key: ThoughtFramePreferenceKey.self,
-                                       value: [thought.id: proxy.frame(in: .named(laneID.uuidString))])
-            }
-        }
-        .contextMenu { Button("Complete") { complete() }; Button("Edit") { beginEdit() }; Menu("Move to…") { ForEach(fetchLanes()) { lane in Button(lane.name) { move(to: lane) } } }; Divider(); Button("Let Go") { letGo() } }.accessibilityElement(children: .ignore).accessibilityLabel("\(thought.text)").accessibilityValue("Added \(timestamp) ago. \(age == .fresh ? "Fresh" : "Aging: \(ageLabel)")").accessibilityHint("Press Return to edit, or Command-Return to complete").accessibilityAction(named: "Edit") { beginEdit() }.accessibilityAction(named: "Complete") { complete() }
     }
     private var ageLabel: String { ThoughtAging.label(for: thought, settings: agingStore.settings, now: now).map { "\($0) old" } ?? "fresh" }
     private func beginEdit() { selectedThoughtID = thought.id; draft = thought.text; editing = true; focus = .thoughtEdit(thought.id) }
     private func cancelEdit() { editing = false; draft = ""; focus = .thought(thought.id) }
-    private func complete() { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { ThoughtManagement.complete(thought, now: .now); try? context.save() }; selectedThoughtID = nil; focus = nil }
-    private func letGo() { ThoughtManagement.letGo(thought, now: .now); try? context.save(); selectedThoughtID = nil; focus = nil }
-    private func move(to lane: Lane) { guard ThoughtManagement.move(thought, to: lane, now: .now) else { return }; try? context.save(); selectedThoughtID = thought.id; focus = .thought(thought.id) }
-    private func save() { guard ThoughtManagement.edit(thought, rawText: draft, now: .now) else { return }; try? context.save(); editing = false; focus = .thought(thought.id) }
-    private func fetchLanes() -> [Lane] { (try? context.fetch(FetchDescriptor<Lane>(sortBy: [SortDescriptor(\Lane.order)]))) ?? [] }
+    private func complete() { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { ThoughtManagement.complete(thought, now: .now); try? context.save(); LanesNotificationBus.thoughtChanged(thought.id) }; selectedThoughtID = nil; focus = nil }
+    private func resetAging() { ThoughtManagement.resetAging(thought, now: .now); try? context.save(); LanesNotificationBus.thoughtChanged(thought.id) }
+    private func save() { guard ThoughtManagement.edit(thought, rawText: draft, now: .now) else { return }; try? context.save(); LanesNotificationBus.thoughtChanged(thought.id); editing = false; focus = .thought(thought.id) }
 }
 
 private struct ThoughtDragPreview: View {
