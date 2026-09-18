@@ -71,4 +71,4 @@ The app uses SwiftUI for its panel, AppKit for the status item/panel and local m
 
 Click the grid icon in the menu bar, type into the capture field, and press Return. Captures land in the first lane; lane-local `+` adds directly to that lane. Click a thought to complete it, double-click to edit, or use its context menu to move or let it go. Thought age is derived from its creation date and is shown with increasingly warm semantic colors.
 
-The package scaffold intentionally keeps the product small. The Xcode app target is now available without changing the SwiftUI/domain layer.
+The package scaffold intentionally keeps the product small. The Xcode app target is now available without changing the SwiftUI/domain layer. The app icon and menu-bar status icon share the same three parallel-rail mark.
