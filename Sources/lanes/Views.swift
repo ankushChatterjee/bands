@@ -737,9 +737,18 @@ enum AppAppearance: String, CaseIterable, Identifiable {
 struct LanesPanelBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
+    private let cornerRadius: CGFloat = 22
+
     var body: some View {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             .fill(LanesTheme.panel(colorScheme))
+            .overlay {
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .strokeBorder(
+                        colorScheme == .dark ? .white.opacity(0.18) : .black.opacity(0.14),
+                        lineWidth: 0.75
+                    )
+            }
     }
 }
 
