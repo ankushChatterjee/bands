@@ -22,6 +22,13 @@ private extension View {
     }
 }
 
+private enum ThoughtClipboard {
+    static func copy(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+}
+
 /// The neutral system is the visual default. Colour is deliberately reserved for
 /// status: a thought only becomes colourful when its age needs attention.
 enum LanesTheme {
@@ -502,7 +509,7 @@ struct RootView: View {
                 if index < targets.count - 1 { available.insert(.moveLater) }
             }
             if selectedThought != nil {
-                available.formUnion([.complete, .resetAging])
+                available.formUnion([.copy, .complete, .resetAging])
                 if lanes.count > 1 { available.insert(.move) }
             }
         }
@@ -572,6 +579,7 @@ struct RootView: View {
         case .newThought: focusQuickCapture()
         case .newLane: beginNewLane()
         case .openSettings: openSettings()
+        case .copy: if let thought = selectedThought { ThoughtClipboard.copy(thought.text) }
         case .complete: if let thought = selectedThought { complete(thought) }
         case .edit:
             if case .addThought = selection.target {
@@ -1349,6 +1357,7 @@ struct ThoughtChip: View {
                 }
             }
             .contextMenu {
+                Button("Copy") { ThoughtClipboard.copy(thought.text) }
                 Button("Edit") { beginEdit() }
                 Button("Reset Aging") { resetAging() }
             }

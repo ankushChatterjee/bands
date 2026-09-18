@@ -194,6 +194,7 @@ struct PanelSelection: Equatable {
 
 enum PanelCommand: String, CaseIterable {
     case quickCapture, newThought, newLane, openSettings
+    case copy
     case complete, edit, resetAging, move, moveEarlier, moveLater, destructive
 
     var title: String {
@@ -202,6 +203,7 @@ enum PanelCommand: String, CaseIterable {
         case .newThought: "New Thought"
         case .newLane: "New Lane"
         case .openSettings: "Settings…"
+        case .copy: "Copy Thought"
         case .complete: "Complete Thought"
         case .edit: "Edit"
         case .resetAging: "Reset Aging"
@@ -218,6 +220,7 @@ enum PanelCommand: String, CaseIterable {
         case .newThought: "⌘N"
         case .newLane: "⇧⌘N"
         case .openSettings: "⌘,"
+        case .copy: "⌘C"
         case .complete: "⌘↩"
         case .edit: "↩"
         case .resetAging: "⌥⌘R"
@@ -228,7 +231,7 @@ enum PanelCommand: String, CaseIterable {
         }
     }
 
-    static let reference: [PanelCommand] = [.quickCapture, .newThought, .newLane, .complete, .edit, .resetAging, .move, .moveEarlier, .moveLater, .destructive, .openSettings]
+    static let reference: [PanelCommand] = [.quickCapture, .newThought, .newLane, .copy, .complete, .edit, .resetAging, .move, .moveEarlier, .moveLater, .destructive, .openSettings]
 }
 
 enum LanesCommandDispatcher {

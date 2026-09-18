@@ -7,6 +7,7 @@ extension PanelCommand {
         case .quickCapture: "l"
         case .newThought, .newLane: "n"
         case .openSettings: ","
+        case .copy: "c"
         case .complete, .edit: .return
         case .resetAging: "r"
         case .move: "m"
@@ -20,6 +21,7 @@ extension PanelCommand {
         case .quickCapture: [.option]
         case .edit: []
         case .newLane: [.command, .shift]
+        case .copy: [.command]
         case .resetAging, .move, .moveEarlier, .moveLater: [.command, .option]
         default: [.command]
         }

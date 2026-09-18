@@ -173,6 +173,7 @@ final class LaneManagementTests: XCTestCase {
             try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: key))
         }
         XCTAssertEqual(PanelCommand.matching(try event(.command, 45, "n")), .newThought)
+        XCTAssertEqual(PanelCommand.matching(try event(.command, 8, "c")), .copy)
         XCTAssertEqual(PanelCommand.matching(try event([.command, .shift], 45, "N")), .newLane)
         XCTAssertEqual(PanelCommand.matching(try event(.command, 36, "\r")), .complete)
         XCTAssertEqual(PanelCommand.matching(try event([], 36, "\r")), .edit)
