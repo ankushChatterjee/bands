@@ -758,6 +758,9 @@ struct SettingsView: View {
     @State private var old = ThoughtAgingSettings.defaults.oldMinutes
 
     private var draft: ThoughtAgingSettings { ThoughtAgingSettings(freshMinutes: fresh, warmMinutes: warm, attentionMinutes: attention, oldMinutes: old) }
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+    }
     private var validationMessage: String? {
         guard draft.freshMinutes >= 15 else { return "Fresh must be at least 15 minutes." }
         guard draft.freshMinutes < draft.warmMinutes else { return "Fresh must be less than Warm." }
@@ -885,6 +888,11 @@ struct SettingsView: View {
                     .keyboardShortcut(.defaultAction)
                     .pointingHandCursor()
             }
+            Divider()
+            Text("Version \(appVersion)")
+                .font(.caption)
+                .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                .frame(maxWidth: .infinity, alignment: .center)
             }
             .padding(18)
             .frame(maxWidth: .infinity, alignment: .leading)
