@@ -2,9 +2,33 @@ import AppKit
 import SwiftUI
 import SwiftData
 
+/// Synchronous request: the panel consumes an event only if its board handles it.
+final class PanelKeyRequest {
+    let event: NSEvent
+    var handled = false
+    init(_ event: NSEvent) { self.event = event }
+}
+
+extension Notification.Name {
+    static let lanesKeyRequest = Notification.Name("lanes.keyRequest")
+    static let lanesPointerInput = Notification.Name("lanes.pointerInput")
+}
+
 final class LanesPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // Menu-bar/accessory apps do not always deliver Command-key events with
+        // this panel as event.window. Give the board one final synchronous
+        // opportunity to handle its registered shortcut before AppKit's menu.
+        if event.type == .keyDown, PanelCommand.matching(event) != nil {
+            let request = PanelKeyRequest(event)
+            NotificationCenter.default.post(name: .lanesKeyRequest, object: request)
+            if request.handled { return true }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 struct PanelPositioning {
@@ -47,6 +71,15 @@ final class PanelController: NSObject, NSWindowDelegate {
         super.init()
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .keyDown]) { [weak self] event in
             guard let self, let panel = self.panel, panel.isVisible else { return event }
+            if event.window === panel, panel.isKeyWindow, panel.attachedSheet == nil, NSApp.modalWindow == nil {
+                if event.type == .keyDown {
+                    let request = PanelKeyRequest(event)
+                    NotificationCenter.default.post(name: .lanesKeyRequest, object: request)
+                    if request.handled { return nil }
+                } else {
+                    NotificationCenter.default.post(name: .lanesPointerInput, object: nil)
+                }
+            }
             if event.type == .keyDown, event.keyCode == 53 {
                 // Let SwiftUI's focused control receive Escape first. Inline editors
                 // cancel themselves; the root view closes the panel when nothing is editing.

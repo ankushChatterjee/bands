@@ -4,16 +4,16 @@ import Carbon.HIToolbox
 
 @MainActor
 final class GlobalCaptureShortcutTests: XCTestCase {
-    func testOptionSpaceIsTheConfiguredShortcut() {
-        XCTAssertEqual(GlobalShortcutEvent.optionSpace.keyCode, 49)
-        XCTAssertEqual(GlobalShortcutEvent.optionSpace.modifiers,  optionKeyValue)
+    func testOptionLIsTheConfiguredShortcut() {
+        XCTAssertEqual(GlobalShortcutEvent.optionL.keyCode, UInt32(kVK_ANSI_L))
+        XCTAssertEqual(GlobalShortcutEvent.optionL.modifiers, optionKeyValue)
     }
 
-    func testParserAcceptsOptionSpaceAndRejectsOtherModifierCombinations() {
-        XCTAssertEqual(GlobalShortcutParser.parse(keyCode: 49, modifierFlags: [.option]), .optionSpace)
-        XCTAssertNil(GlobalShortcutParser.parse(keyCode: 49, modifierFlags: [.option, .command]))
+    func testParserAcceptsOptionLAndRejectsOtherModifierCombinations() {
+        XCTAssertEqual(GlobalShortcutParser.parse(keyCode: UInt16(kVK_ANSI_L), modifierFlags: [.option]), .optionL)
+        XCTAssertNil(GlobalShortcutParser.parse(keyCode: UInt16(kVK_ANSI_L), modifierFlags: [.option, .command]))
         XCTAssertNil(GlobalShortcutParser.parse(keyCode: 36, modifierFlags: [.option]))
-        XCTAssertNil(GlobalShortcutParser.parse(keyCode: 49, modifierFlags: []))
+        XCTAssertNil(GlobalShortcutParser.parse(keyCode: UInt16(kVK_ANSI_L), modifierFlags: []))
     }
 
     func testRegistrationIsIdempotentAndRoutesMatchingEvent() {
@@ -24,7 +24,7 @@ final class GlobalCaptureShortcutTests: XCTestCase {
         XCTAssertTrue(controller.register())
         XCTAssertTrue(controller.register())
         XCTAssertEqual(registrar.registerCount, 1)
-        controller.route(.optionSpace)
+        controller.route(.optionL)
         XCTAssertEqual(actionCount, 1)
     }
 
@@ -34,8 +34,8 @@ final class GlobalCaptureShortcutTests: XCTestCase {
         let controller = GlobalCaptureShortcutController(registrar: registrar) { actionCount += 1 }
         XCTAssertTrue(controller.register())
 
-        controller.route(GlobalShortcutEvent(keyCode: 36, modifiers: GlobalShortcutEvent.optionSpace.modifiers))
-        controller.route(GlobalShortcutEvent(keyCode: GlobalShortcutEvent.optionSpace.keyCode, modifiers: 0))
+        controller.route(GlobalShortcutEvent(keyCode: 36, modifiers: GlobalShortcutEvent.optionL.modifiers))
+        controller.route(GlobalShortcutEvent(keyCode: GlobalShortcutEvent.optionL.keyCode, modifiers: 0))
         XCTAssertEqual(actionCount, 0)
     }
 
@@ -56,7 +56,7 @@ final class GlobalCaptureShortcutTests: XCTestCase {
         XCTAssertTrue(controller.register())
         controller.unregister()
         controller.unregister()
-        controller.route(.optionSpace)
+        controller.route(.optionL)
 
         XCTAssertEqual(actionCount, 0)
         XCTAssertEqual(controller.state, .idle)

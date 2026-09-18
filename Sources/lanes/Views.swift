@@ -58,6 +58,10 @@ enum LanesTheme {
         scheme == .dark ? Color.white.opacity(0.22) : Color.black.opacity(0.12)
     }
 
+    static func keyboardFocus(_ scheme: ColorScheme) -> Color {
+        scheme == .dark ? softGray : graphite
+    }
+
     /// Age uses one semantic accent per state in every appearance. The fill
     /// opacity changes with the background, but the hue does not.
     static func chipAccent(for age: ThoughtAge) -> Color {
@@ -190,21 +194,33 @@ struct RootView: View {
     @Query(sort: \Lane.order) private var lanes: [Lane]
     @State private var newLane = ""
     @State private var addingLane = false
-    @State private var selectedThoughtID: UUID?
+    @State private var composingLaneID: UUID?
+    @State private var selection = PanelSelection()
     @State private var draggingLaneID: UUID?
     @State private var hoveringLaneBin = false
     @State private var lanePendingDeletion: Lane?
     @State private var showingSettings = false
+    @State private var thoughtPendingRelease: Thought?
+    @State private var thoughtPendingMove: Thought?
     @FocusState private var focus: PanelFocus?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
+    @AppStorage(InsertionPreferences.thoughtsAtEndKey) private var thoughtsAtEnd = false
     @State private var timestampRefreshDate = Date.now
     private let timestampRefreshTimer = Timer.publish(every: 5 * 60, on: .main, in: .common).autoconnect()
 
-    enum PanelFocus: Hashable { case newLane, laneInput(UUID), laneRename(UUID), thought(UUID), thoughtEdit(UUID) }
+    enum PanelFocus: Hashable {
+        case newLane, lane(UUID), laneAdd(UUID), laneInput(UUID), laneRename(UUID), thought(UUID), thoughtEdit(UUID)
+        var isEditing: Bool {
+            switch self {
+            case .newLane, .laneInput, .laneRename, .thoughtEdit: true
+            default: false
+            }
+        }
+    }
 
-    var body: some View {
+    private var boardContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             lanesList
         }
@@ -216,6 +232,10 @@ struct RootView: View {
                 .padding(.trailing, 16)
                 .padding(.bottom, 14)
         }
+    }
+
+    private var boardWithSheets: some View {
+        boardContent
         .confirmationDialog(
             lanePendingDeletion.map { "Delete \($0.name)?" } ?? "Delete lane?",
             isPresented: Binding(
@@ -232,32 +252,98 @@ struct RootView: View {
         } message: {
             Text("This permanently removes the lane and its active thoughts.")
         }
-        .sheet(isPresented: $showingSettings) {
+        .confirmationDialog(
+            thoughtPendingRelease.map { "Release \($0.text)?" } ?? "Release thought?",
+            isPresented: Binding(get: { thoughtPendingRelease != nil }, set: { if !$0 { thoughtPendingRelease = nil } })
+        ) {
+            Button("Release Thought", role: .destructive) {
+                if let thought = thoughtPendingRelease { release(thought) }
+                thoughtPendingRelease = nil
+            }
+            Button("Cancel", role: .cancel) { thoughtPendingRelease = nil }
+        } message: {
+            Text("Released thoughts are removed from active lanes.")
+        }
+        .sheet(item: $thoughtPendingMove, onDismiss: restoreSelection) { thought in
+            MoveThoughtSheet(thought: thought, lanes: lanes) { lane in move(thought, to: lane) }
+        }
+        .sheet(isPresented: $showingSettings, onDismiss: restoreSelection) {
             SettingsView()
                 .environmentObject(ThoughtAgingSettingsStore.shared)
         }
+    }
+
+    var body: some View {
+        observedBoard
             .onAppear {
                 focus = nil
                 AppAppearance.apply(appearance)
                 timestampRefreshDate = .now
+                updateCommands()
             }
             .onChange(of: appearance) { _, value in AppAppearance.apply(value) }
             .onReceive(NotificationCenter.default.publisher(for: .lanesPanelDidOpen)) { _ in
-                focus = nil
+                if case .laneInput(let id) = focus {
+                    composingLaneID = nil
+                    selection.select(.lane(id), with: .keyboard)
+                    focus = .lane(id)
+                } else if focus?.isEditing != true {
+                    composingLaneID = nil
+                    restoreSelection()
+                }
                 timestampRefreshDate = .now
+            }
+            .onReceive(NotificationCenter.default.publisher(for: LanesCommandDispatcher.notification)) { notification in
+                guard let command = notification.object as? PanelCommand else { return }
+                perform(command)
             }
             .onReceive(timestampRefreshTimer) { timestampRefreshDate = $0 }
             .onExitCommand { NSApp.keyWindow?.orderOut(nil) }
-            .onMoveCommand { direction in
-                switch direction {
-                case .down: moveSelection(.down)
-                case .up: moveSelection(.up)
+    }
+
+    private var observedBoard: some View {
+        boardWithSheets
+            .onChange(of: selection) { _, _ in updateCommands() }
+            .onChange(of: showingSettings) { _, visible in
+                updateCommands()
+                if !visible { restoreSelection() }
+            }
+            .onChange(of: thoughtPendingMove?.id) { _, id in
+                updateCommands()
+                if id == nil { restoreSelection() }
+            }
+            .onChange(of: thoughtPendingRelease?.id) { _, id in
+                updateCommands()
+                if id == nil { restoreSelection() }
+            }
+            .onChange(of: lanePendingDeletion?.id) { _, id in
+                updateCommands()
+                if id == nil { restoreSelection() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .lanesKeyRequest)) { notification in
+                if let request = notification.object as? PanelKeyRequest { handleKey(request) }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .lanesPointerInput)) { _ in
+                selection.modality = .pointer
+            }
+            .onChange(of: focus) { _, focus in
+                updateCommands()
+                switch focus {
+                case .lane(let id):
+                    if selection.target != .lane(id) { selection.select(.lane(id), with: .keyboard) }
+                case .thought(let id):
+                    if selection.target != .thought(id) { selection.select(.thought(id), with: .keyboard) }
+                case .laneAdd(let id):
+                    if selection.target != .addThought(id) { selection.select(.addThought(id), with: .keyboard) }
+                case .laneInput(let id), .laneRename(let id):
+                    if selection.target != .lane(id) { selection.select(.lane(id), with: .keyboard) }
                 default: break
                 }
-        }
+            }
     }
 
     private var lanesList: some View {
+        ScrollViewReader { proxy in
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 if lanes.isEmpty {
@@ -265,7 +351,8 @@ struct RootView: View {
                         .frame(maxWidth: .infinity, minHeight: 180)
                 } else {
                     ForEach(lanes) { lane in
-                        LaneRow(lane: lane, lanes: lanes, now: timestampRefreshDate, selectedThoughtID: $selectedThoughtID, focus: $focus, draggingLaneID: $draggingLaneID, onDelete: deleteLane, onMoveLane: moveLane)
+                        LaneRow(lane: lane, lanes: lanes, now: timestampRefreshDate, selection: $selection, focus: $focus, composingLaneID: $composingLaneID, draggingLaneID: $draggingLaneID, onDelete: deleteLane, onMoveLane: moveLane)
+                            .id(PanelSelection.Target.lane(lane.id))
                             .transition(reduceMotion ? .identity : .move(edge: .top).combined(with: .opacity))
                         if lane.id != lanes.last?.id { Divider() }
                     }
@@ -276,6 +363,32 @@ struct RootView: View {
             .padding(.bottom, 52)
         }
         .padding(.top, 8)
+        .onChange(of: selection.target) { _, target in
+            guard selection.modality == .keyboard, let target else { return }
+            scrollToKeyboardTarget(target, using: proxy)
+        }
+        .onChange(of: focus) { _, value in
+            if case .laneInput(let id) = value {
+                scrollToKeyboardTarget(.lane(id), using: proxy)
+            }
+        }
+        }
+    }
+
+    private func scrollToKeyboardTarget(_ target: PanelSelection.Target, using proxy: ScrollViewProxy) {
+        // Selection changes and layout changes are delivered in separate SwiftUI
+        // passes. Defer until the selected chip has been placed, then keep it
+        // comfortably inside the viewport instead of pinning it to an edge.
+        DispatchQueue.main.async {
+            withAnimation(.easeInOut(duration: 0.22)) {
+                switch target {
+                case .addThought(let id):
+                    proxy.scrollTo(PanelSelection.Target.lane(id), anchor: .center)
+                case .lane, .thought:
+                    proxy.scrollTo(target, anchor: .center)
+                }
+            }
+        }
     }
 
     private var floatingActions: some View {
@@ -345,7 +458,7 @@ struct RootView: View {
         showingSettings = true
     }
     private func beginNewLane() { newLane = ""; addingLane = true; focus = .newLane }
-    private func cancelNewLane() { addingLane = false; newLane = ""; focus = nil }
+    private func cancelNewLane() { addingLane = false; newLane = ""; restoreSelection() }
     private func addLane() {
         guard case .valid(let name) = LaneManagement.validateName(newLane, existingNames: lanes.map(\.name)) else { return }
         let lane = Lane(name: name, order: 0)
@@ -354,7 +467,126 @@ struct RootView: View {
             context.insert(lane)
             try? context.save()
         }
-        cancelNewLane()
+        addingLane = false
+        newLane = ""
+        select(.lane(lane.id))
+    }
+    private func focusQuickCapture() {
+        let targetLaneID = selection.laneID ?? selectedThought?.lane?.id
+        guard let lane = targetLaneID.flatMap({ id in lanes.first(where: { $0.id == id }) }) ?? lanes.first else { beginNewLane(); return }
+        selection.select(.lane(lane.id), with: .keyboard)
+        composingLaneID = lane.id
+        // The conditional editor must exist before FocusState can target it.
+        DispatchQueue.main.async { focus = .laneInput(lane.id) }
+    }
+    private var modalIsPresented: Bool {
+        showingSettings || thoughtPendingMove != nil || thoughtPendingRelease != nil || lanePendingDeletion != nil
+    }
+    private func updateCommands() {
+        var available: Set<PanelCommand> = []
+        if !modalIsPresented && focus?.isEditing != true {
+            available = [.quickCapture, .newThought, .newLane, .openSettings]
+            if case .addThought = selection.target {
+                // Return on the focused + opens its inline composer.
+                available.insert(.edit)
+            }
+            let targets: [PanelSelection.Target]
+            if let thought = selectedThought, let lane = thought.lane {
+                targets = laneThoughts(lane).map { .thought($0.id) }
+            } else {
+                targets = lanes.map { .lane($0.id) }
+            }
+            if let target = selection.target, let index = targets.firstIndex(of: target) {
+                available.formUnion([.edit, .destructive])
+                if index > 0 { available.insert(.moveEarlier) }
+                if index < targets.count - 1 { available.insert(.moveLater) }
+            }
+            if selectedThought != nil {
+                available.formUnion([.complete, .resetAging])
+                if lanes.count > 1 { available.insert(.move) }
+            }
+        }
+        BoardCommands.shared.available = available
+    }
+    private func select(_ target: PanelSelection.Target?) {
+        selection.select(target, with: .keyboard)
+        // Let the destination row/control render before asking SwiftUI to focus it.
+        // This is essential for an empty lane, whose + button is the destination.
+        DispatchQueue.main.async { restoreSelection() }
+    }
+    private func restoreSelection() {
+        switch selection.target {
+        case .lane(let id): focus = .lane(id)
+        case .thought(let id): focus = .thought(id)
+        case .addThought(let id): focus = .laneAdd(id)
+        case nil: focus = nil
+        }
+    }
+    private var boardLanes: [BoardLane] {
+        lanes.map { BoardLane(id: $0.id, thoughts: laneThoughts($0).map(\.id), thoughtsAtEnd: thoughtsAtEnd) }
+    }
+    private func handleKey(_ request: PanelKeyRequest) {
+        guard !modalIsPresented else { return }
+        let event = request.event
+        // Never steal cursor keys, text selection, or IME input from an editor.
+        let textEditing = (NSApp.keyWindow?.firstResponder as? NSTextView)?.isEditable == true
+        guard focus?.isEditing != true && !textEditing else { return }
+        if let command = PanelCommand.matching(event), command != .quickCapture {
+            request.handled = true
+            perform(command)
+            return
+        }
+        if event.keyCode == 48 && event.modifierFlags.intersection([.command, .option, .control]).isEmpty {
+            request.handled = true
+            return
+        }
+        guard event.modifierFlags.intersection([.command, .option, .control, .shift]).isEmpty else { return }
+        let direction: BoardDirection?
+        switch event.keyCode {
+        case 123: direction = .left
+        case 124: direction = .right
+        case 125: direction = .down
+        case 126: direction = .up
+        case 48: request.handled = true; return
+        default: direction = nil
+        }
+        if let direction {
+            select(BoardNavigation.target(from: selection.target, direction: direction, lanes: boardLanes))
+            request.handled = true
+        }
+    }
+    private var selectedThought: Thought? {
+        guard let id = selection.thoughtID else { return nil }
+        return (try? context.fetch(FetchDescriptor<Thought>()))?.first(where: { $0.id == id && $0.completedAt == nil && $0.releasedAt == nil })
+    }
+    private func perform(_ command: PanelCommand) {
+        guard !modalIsPresented else { return }
+        // Global invocation restores an existing editor rather than discarding its draft.
+        if focus?.isEditing == true { return }
+        updateCommands()
+        guard BoardCommands.shared.available.contains(command) else { return }
+        switch command {
+        case .quickCapture:
+            selection.select(lanes.first.map { .lane($0.id) }, with: .keyboard)
+            focusQuickCapture()
+        case .newThought: focusQuickCapture()
+        case .newLane: beginNewLane()
+        case .openSettings: openSettings()
+        case .complete: if let thought = selectedThought { complete(thought) }
+        case .edit:
+            if case .addThought = selection.target {
+                focusQuickCapture()
+            } else if let target = selection.target {
+                NotificationCenter.default.post(name: .lanesBeginEdit, object: target)
+            }
+        case .resetAging: if let thought = selectedThought { resetAging(thought) }
+        case .move: if let thought = selectedThought, lanes.count > 1 { thoughtPendingMove = thought }
+        case .moveEarlier: moveSelected(.up)
+        case .moveLater: moveSelected(.down)
+        case .destructive:
+            if let thought = selectedThought { thoughtPendingRelease = thought }
+            else if let laneID = selection.laneID, let lane = lanes.first(where: { $0.id == laneID }) { lanePendingDeletion = lane }
+        }
     }
     private func moveLanes(from source: IndexSet, to destination: Int) { _ = LaneManagement.reordered(lanes, moving: source, to: destination); try? context.save() }
     private func moveLane(_ lane: Lane, onto target: Lane) {
@@ -370,18 +602,57 @@ struct RootView: View {
             try? context.save()
         }
     }
-    private func moveSelection(_ direction: PanelMoveDirection) {
-        let thoughts = lanes.flatMap { lane in laneThoughts(lane) }
-        guard let next = PanelSelection.nextIndex(current: selectedThoughtID.flatMap { id in thoughts.firstIndex { $0.id == id } }, direction: direction, count: thoughts.count) else { return }
-        selectedThoughtID = thoughts[next].id; focus = .thought(thoughts[next].id)
-    }
     private func laneThoughts(_ lane: Lane) -> [Thought] {
         ((try? context.fetch(FetchDescriptor<Thought>())) ?? [])
             .filter { $0.lane?.id == lane.id && $0.completedAt == nil && $0.releasedAt == nil }
             .sorted { ($0.order ?? 0, $0.createdAt) > ($1.order ?? 0, $1.createdAt) }
     }
-    private func completeSelected() { guard case .thought = focus, let id = selectedThoughtID, let thought = (try? context.fetch(FetchDescriptor<Thought>()))?.first(where: { $0.id == id }) else { return }; ThoughtManagement.complete(thought, now: .now); try? context.save(); LanesNotificationBus.thoughtChanged(thought.id); selectedThoughtID = nil; focus = nil }
-    private func deleteLane(_ lane: Lane) { let thoughts = (try? context.fetch(FetchDescriptor<Thought>())) ?? []; let affected = thoughts.filter { $0.lane?.id == lane.id }.map { $0.id }; thoughts.filter { $0.lane?.id == lane.id }.forEach(context.delete); context.delete(lane); try? context.save(); affected.forEach(LanesNotificationBus.thoughtChanged) }
+    private func complete(_ thought: Thought) {
+        selectAdjacent(after: thought)
+        ThoughtManagement.complete(thought, now: .now)
+        try? context.save()
+        LanesNotificationBus.thoughtChanged(thought.id)
+    }
+    private func release(_ thought: Thought) {
+        selectAdjacent(after: thought)
+        ThoughtManagement.letGo(thought, now: .now)
+        try? context.save()
+        LanesNotificationBus.thoughtChanged(thought.id)
+    }
+    private func resetAging(_ thought: Thought) { ThoughtManagement.resetAging(thought, now: .now); try? context.save(); LanesNotificationBus.thoughtChanged(thought.id) }
+    private func move(_ thought: Thought, to lane: Lane) {
+        let destination = laneThoughts(lane)
+        ThoughtManagement.reorder(thought, to: lane, among: destination, at: 0, now: .now)
+        try? context.save()
+        selection.select(.thought(thought.id), with: .keyboard)
+        focus = .thought(thought.id)
+    }
+    private func moveSelected(_ direction: PanelMoveDirection) {
+        if let thought = selectedThought, let lane = thought.lane, ThoughtManagement.moveWithinLane(thought, among: laneThoughts(lane), direction: direction, now: .now) { try? context.save() }
+        else if let laneID = selection.laneID, let current = lanes.firstIndex(where: { $0.id == laneID }) {
+            let destination = direction == .up ? current - 1 : current + 1
+            guard lanes.indices.contains(destination) else { return }
+            _ = LaneManagement.reordered(lanes, moving: IndexSet(integer: current), to: direction == .up ? destination : destination + 1)
+            try? context.save()
+        }
+    }
+    private func selectAdjacent(after thought: Thought) {
+        guard let lane = boardLanes.first(where: { $0.id == thought.lane?.id }) else { select(nil); return }
+        select(BoardNavigation.afterRemoving(thought.id, from: lane))
+    }
+    private func deleteLane(_ lane: Lane) {
+        let index = lanes.firstIndex(where: { $0.id == lane.id }) ?? 0
+        let remaining = lanes.filter { $0.id != lane.id }
+        let next = remaining.isEmpty ? nil : remaining[min(index, remaining.count - 1)]
+        let thoughts = (try? context.fetch(FetchDescriptor<Thought>())) ?? []
+        let affected = thoughts.filter { $0.lane?.id == lane.id }
+        let ids = affected.map(\.id)
+        affected.forEach(context.delete)
+        context.delete(lane)
+        try? context.save()
+        ids.forEach(LanesNotificationBus.thoughtChanged)
+        select(next.map { .lane($0.id) })
+    }
     private func dropLaneOnBin(_ providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
         provider.loadObject(ofClass: NSString.self) { object, _ in
@@ -575,11 +846,17 @@ struct SettingsView: View {
             .padding(.vertical, 4)
             Divider()
             SettingsSection(title: "Keyboard shortcuts") {
-                ShortcutRow(title: "Capture a thought", shortcut: "⌘N")
-                Divider()
-                ShortcutRow(title: "New lane", shortcut: "⇧⌘N")
-                Divider()
-                ShortcutRow(title: "Complete selected thought", shortcut: "⌘↩")
+                ShortcutRow(title: "Change lane", shortcut: "↑ / ↓")
+                ShortcutRow(title: "Navigate thoughts", shortcut: "← / →")
+                ShortcutRow(title: "Select lane name", shortcut: "← from first thought / +")
+                ShortcutRow(title: "Open selected +", shortcut: "Return")
+                ShortcutRow(title: "Cancel editor / close panel", shortcut: "Esc")
+                Text("Arrow navigation applies when browsing. Empty lanes use + as their content target. Return renames a selected lane name or opens a selected +. Text fields keep standard editing keys. New Thought uses the selected lane; Quick Capture uses the top lane.")
+                    .font(.caption).foregroundStyle(.secondary)
+                ForEach(Array(PanelCommand.reference.enumerated()), id: \.element) { index, command in
+                    ShortcutRow(title: command.title, shortcut: command.shortcut)
+                    if index != PanelCommand.reference.count - 1 { Divider() }
+                }
             }
             Divider()
             HStack {
@@ -666,6 +943,45 @@ private struct ShortcutRow: View {
     }
 }
 
+private struct MoveThoughtSheet: View {
+    let thought: Thought
+    let lanes: [Lane]
+    let onMove: (Lane) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @FocusState private var focusPicker: Bool
+    @State private var destinationID: UUID
+
+    init(thought: Thought, lanes: [Lane], onMove: @escaping (Lane) -> Void) {
+        self.thought = thought
+        self.lanes = lanes
+        self.onMove = onMove
+        _destinationID = State(initialValue: lanes.first(where: { $0.id != thought.lane?.id })?.id ?? thought.lane?.id ?? UUID())
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Move Thought").font(.headline)
+            Text(thought.text).lineLimit(2).foregroundStyle(.secondary)
+            Picker("Move to lane", selection: $destinationID) {
+                ForEach(lanes.filter { $0.id != thought.lane?.id }) { lane in Text(lane.name).tag(lane.id) }
+            }
+            .focused($focusPicker)
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) { dismiss() }
+                Button("Move") {
+                    if let lane = lanes.first(where: { $0.id == destinationID }) { onMove(lane) }
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 360)
+        .onAppear { focusPicker = true }
+    }
+}
+
 private struct ThresholdStepper: View {
     let title: String
     @Binding var minutes: Int
@@ -694,6 +1010,7 @@ private struct ThresholdStepper: View {
 
 extension Notification.Name {
     static let lanesPanelDidOpen = Notification.Name("lanes.panelDidOpen")
+    static let lanesBeginEdit = Notification.Name("lanes.beginEdit")
 }
 
 struct LaneRow: View {
@@ -707,15 +1024,16 @@ struct LaneRow: View {
     @Query(sort: [SortDescriptor(\Thought.order, order: .reverse), SortDescriptor(\Thought.createdAt, order: .reverse)]) private var allThoughts: [Thought]
     let lanes: [Lane]
     let now: Date
-    @Binding var selectedThoughtID: UUID?
+    @Binding var selection: PanelSelection
     @FocusState.Binding var focus: RootView.PanelFocus?
+    @Binding var composingLaneID: UUID?
     @Binding var draggingLaneID: UUID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(InsertionPreferences.thoughtsAtEndKey) private var thoughtsAtEnd = false
     let onDelete: (Lane) -> Void
     let onMoveLane: (Lane, Lane) -> Void
-    @State private var adding = false; @State private var input = ""; @State private var editing = false; @State private var name = ""; @State private var showingDeleteConfirmation = false; @State private var hoveringAdd = false; @State private var hoveringLane = false; @State private var dropTargeted = false; @State private var thoughtFrames: [UUID: CGRect] = [:]
+    @State private var input = ""; @State private var editing = false; @State private var name = ""; @State private var showingDeleteConfirmation = false; @State private var hoveringAdd = false; @State private var hoveringLane = false; @State private var dropTargeted = false; @State private var thoughtFrames: [UUID: CGRect] = [:]
     @State private var insertionIndex: Int?
     @State private var laneDropAfter = false
     var thoughts: [Thought] {
@@ -724,54 +1042,7 @@ struct LaneRow: View {
             .sorted { ($0.order ?? 0, $0.createdAt) > ($1.order ?? 0, $1.createdAt) }
     }
     var body: some View {
-        FlowLayout {
-            HStack(spacing: 0) {
-                if editing {
-                    TextField("Lane name", text: $name)
-                        .textFieldStyle(.plain)
-                        .focused($focus, equals: .laneRename(lane.id))
-                        .onSubmit { saveName() }
-                        .onExitCommand { cancelRename() }
-                        .accessibilityLabel("Rename lane \(lane.name)")
-                        .accessibilityHint("Press Return to save, or Escape to cancel")
-                } else {
-                    Text(lane.name)
-                        .onTapGesture(count: 2) { beginRename() }
-                }
-            }
-            .font(Self.laneNameFont)
-            .foregroundStyle(LanesTheme.laneText(colorScheme))
-            .padding(.horizontal, Self.lanePillHorizontalPadding)
-            .padding(.vertical, Self.lanePillVerticalPadding)
-            .background(LanesTheme.laneFill(colorScheme), in: RoundedRectangle(cornerRadius: Self.lanePillCornerRadius, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: Self.lanePillCornerRadius, style: .continuous).strokeBorder(.black.opacity(0.10)))
-            .onHover { hoveringLane = $0 }
-            .pointingHandCursor()
-            .rotationEffect(.degrees(hoveringLane && !editing ? -2 : 0), anchor: .center)
-            .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.58), value: hoveringLane)
-            // Keep the lane drag source on the name pill only. The row below is
-            // intentionally the full-width drop zone for both lane and thought drops.
-            .onDrag {
-                draggingLaneID = lane.id
-                return NSItemProvider(object: lane.id.uuidString as NSString)
-            } preview: {
-                LaneDragPreview(name: lane.name)
-            }
-            .focusEffectDisabled()
-            .accessibilityLabel("Lane \(lane.name)")
-            .accessibilityHint("Double-click or use the context menu to rename")
-            if !thoughtsAtEnd { thoughtAdditionControl }
-            ForEach(Array(thoughts.enumerated()), id: \.element.id) { index, thought in
-                if dropTargeted && insertionIndex == index {
-                    ThoughtInsertionIndicator()
-                }
-                ThoughtChip(thought: thought, laneID: lane.id, now: now, selectedThoughtID: $selectedThoughtID, focus: $focus)
-            }
-            if dropTargeted && insertionIndex == thoughts.count {
-                ThoughtInsertionIndicator()
-            }
-            if thoughtsAtEnd { thoughtAdditionControl }
-        }
+        laneFlow
         .padding(.vertical, 8)
         .padding(.horizontal, dropTargeted ? 5 : 0)
         .background {
@@ -817,21 +1088,79 @@ struct LaneRow: View {
             isTargeted: $dropTargeted,
             insertionIndex: $insertionIndex
         ))
-        .contextMenu { Button("Rename") { beginRename() }; Button("Add Thought") { adding = true; focus = .laneInput(lane.id) }; Divider(); Button("Delete Lane", role: .destructive, action: requestDeletion) }
-        .confirmationDialog("Delete \"\(lane.name)\"?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) { Button("Delete Lane", role: .destructive) { onDelete(lane) }; Button("Cancel", role: .cancel) {} } message: { Text("This will delete its \(thoughts.count) active thought\(thoughts.count == 1 ? "" : "s").") } }
-    private func beginRename() { name = lane.name; editing = true; focus = .laneRename(lane.id) }
-    private func requestDeletion() {
-        if thoughts.isEmpty {
-            onDelete(lane)
-        } else {
-            showingDeleteConfirmation = true
+        .contextMenu { Button("Rename") { beginRename() }; Button("Add Thought") { beginAdd() }; Divider(); Button("Delete Lane", role: .destructive, action: requestDeletion) }
+        .confirmationDialog("Delete \"\(lane.name)\"?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) { Button("Delete Lane", role: .destructive) { onDelete(lane) }; Button("Cancel", role: .cancel) {} } message: { Text("This will delete its \(thoughts.count) active thought\(thoughts.count == 1 ? "" : "s").") }
+        .onChange(of: focus) { _, focus in
+            if focus == .laneRename(lane.id), !editing { beginRename() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lanesBeginEdit)) { notification in
+            guard let target = notification.object as? PanelSelection.Target,
+                  target == .lane(lane.id) else { return }
+            beginRename()
         }
     }
-    private func cancelRename() { editing = false; name = ""; focus = nil }
+    private var laneFlow: some View {
+        FlowLayout {
+            lanePill
+            if !thoughtsAtEnd { thoughtAdditionControl }
+            thoughtItems
+            if thoughtsAtEnd { thoughtAdditionControl }
+        }
+    }
+    @ViewBuilder private var thoughtItems: some View {
+        ForEach(Array(thoughts.enumerated()), id: \.element.id) { index, thought in
+            if dropTargeted && insertionIndex == index { ThoughtInsertionIndicator() }
+            ThoughtChip(thought: thought, laneID: lane.id, now: now, selection: $selection, focus: $focus)
+                .id(PanelSelection.Target.thought(thought.id))
+        }
+        if dropTargeted && insertionIndex == thoughts.count { ThoughtInsertionIndicator() }
+    }
+    private var lanePill: some View {
+        HStack(spacing: 0) {
+            if editing {
+                TextField("Lane name", text: $name).textFieldStyle(.plain).focused($focus, equals: .laneRename(lane.id)).onSubmit { saveName() }.onExitCommand { cancelRename() }
+                    .onAppear { DispatchQueue.main.async { focus = .laneRename(lane.id) } }
+            } else {
+                Text(lane.name)
+                    .contentShape(Rectangle())
+                    .onTapGesture { selection.select(.lane(lane.id), with: .pointer); focus = .lane(lane.id) }
+                    .focusable().focused($focus, equals: .lane(lane.id))
+                    .onKeyPress(.return) { beginRename(); return .handled }
+            }
+        }
+        .font(Self.laneNameFont).foregroundStyle(LanesTheme.laneText(colorScheme))
+        .padding(.horizontal, Self.lanePillHorizontalPadding).padding(.vertical, Self.lanePillVerticalPadding)
+        .background(LanesTheme.laneFill(colorScheme), in: RoundedRectangle(cornerRadius: Self.lanePillCornerRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Self.lanePillCornerRadius, style: .continuous).strokeBorder(.black.opacity(0.10)))
+        .overlay { if focus == .lane(lane.id) && selection.target == .lane(lane.id) && selection.showsKeyboardFocus && !editing { RoundedRectangle(cornerRadius: Self.lanePillCornerRadius + 3, style: .continuous).stroke(LanesTheme.keyboardFocus(colorScheme), lineWidth: 2).padding(-3).allowsHitTesting(false) } }
+        .onHover { hoveringLane = $0 }.pointingHandCursor()
+        .rotationEffect(.degrees(hoveringLane && !editing ? -2 : 0), anchor: .center)
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.58), value: hoveringLane)
+        // Keep the source on a plain view. Interactive controls can consume
+        // the mouse gesture before SwiftUI creates the drag provider.
+        .onDrag { draggingLaneID = lane.id; return NSItemProvider(object: lane.id.uuidString as NSString) } preview: {
+            LaneDragPreview(name: lane.name)
+        }
+        .focusEffectDisabled().accessibilityLabel("Lane \(lane.name)")
+    }
+    private func beginRename() {
+        name = lane.name
+        editing = true
+        DispatchQueue.main.async { focus = .laneRename(lane.id) }
+    }
+    private func requestDeletion() {
+        showingDeleteConfirmation = true
+    }
+    private func cancelRename() { editing = false; name = ""; focus = .lane(lane.id) }
     private func saveName() { guard case .valid(let value) = LaneManagement.validateName(name, existingNames: lanes.map(\.name), excluding: lane.name) else { return }; lane.name = value; try? context.save(); cancelRename() }
-    private func cancelAdd() { adding = false; input = ""; focus = nil }
+    private func beginAdd() {
+        input = ""
+        composingLaneID = lane.id
+        DispatchQueue.main.async { focus = .laneInput(lane.id) }
+    }
+    private func cancelAdd() { composingLaneID = nil; input = ""; selection.select(.lane(lane.id), with: .keyboard); focus = .lane(lane.id) }
     @ViewBuilder private var thoughtAdditionControl: some View {
-        if adding {
+        if composingLaneID == lane.id {
             ThoughtBubble {
                 HStack(spacing: 6) {
                     TextField("", text: $input,
@@ -839,6 +1168,7 @@ struct LaneRow: View {
                         .textFieldStyle(.plain)
                         .frame(minWidth: 112)
                         .focused($focus, equals: .laneInput(lane.id))
+                        .onAppear { DispatchQueue.main.async { focus = .laneInput(lane.id) } }
                         .onSubmit { addThought() }
                         .onExitCommand { cancelAdd() }
                         .accessibilityLabel("New thought in \(lane.name)")
@@ -851,8 +1181,7 @@ struct LaneRow: View {
             }
         } else {
             Button {
-                adding = true
-                focus = .laneInput(lane.id)
+                beginAdd()
             } label: {
                 Image(systemName: "plus")
                     .font(.body.weight(.medium))
@@ -861,7 +1190,24 @@ struct LaneRow: View {
                     .background(hoveringAdd ? Color.primary.opacity(0.12) : .clear, in: Circle())
             }
             .buttonStyle(.plain)
+            .focusable()
+            .focused($focus, equals: .laneAdd(lane.id))
+            .focusEffectDisabled()
             .foregroundStyle(hoveringAdd ? .primary : LanesTheme.secondaryText(colorScheme))
+            .background {
+                if focus == .laneAdd(lane.id) && selection.target == .addThought(lane.id) && selection.showsKeyboardFocus {
+                    Circle().fill(LanesTheme.keyboardFocus(colorScheme).opacity(0.08)).padding(-3).allowsHitTesting(false)
+                }
+            }
+            .overlay {
+                if focus == .laneAdd(lane.id) && selection.target == .addThought(lane.id) && selection.showsKeyboardFocus {
+                    Circle().stroke(LanesTheme.keyboardFocus(colorScheme), lineWidth: 2).padding(-3).allowsHitTesting(false)
+                }
+            }
+            .onKeyPress(.return) {
+                beginAdd()
+                return .handled
+            }
             .onHover { hoveringAdd = $0 }
             .animation(.easeOut(duration: 0.14), value: hoveringAdd)
             .pointingHandCursor()
@@ -879,7 +1225,10 @@ struct LaneRow: View {
         context.insert(thought)
         try? context.save()
         LanesNotificationBus.thoughtChanged(thought.id)
-        cancelAdd()
+        composingLaneID = nil
+        input = ""
+        selection.select(.thought(thought.id), with: .keyboard)
+        focus = .thought(thought.id)
     }
     private func handleDrop(raw: String, at location: CGPoint) -> Bool {
         guard let sourceID = UUID(uuidString: raw) else { return false }
@@ -954,7 +1303,7 @@ struct ThoughtChip: View {
     @Bindable var thought: Thought
     let laneID: UUID
     let now: Date
-    @Binding var selectedThoughtID: UUID?
+    @Binding var selection: PanelSelection
     @FocusState.Binding var focus: RootView.PanelFocus?
     @State private var editing = false; @State private var draft = ""; @State private var hovering = false
     var age: ThoughtAge { ThoughtAging.age(for: thought, settings: agingStore.settings, now: now) }
@@ -968,6 +1317,30 @@ struct ThoughtChip: View {
         return width > 292
     }
     var body: some View {
+        observedChip
+    }
+    private var observedChip: some View {
+        accessibleChip
+            .onChange(of: focus) { _, focus in
+                if focus == .thoughtEdit(thought.id), !editing { beginEdit() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .lanesBeginEdit)) { notification in
+                guard let target = notification.object as? PanelSelection.Target,
+                      target == .thought(thought.id) else { return }
+                beginEdit()
+            }
+    }
+    private var accessibleChip: some View {
+        framedChip
+            .accessibilityElement(children: editing ? .contain : .ignore)
+            .accessibilityLabel("\(thought.text)")
+            .accessibilityValue("Added \(timestamp) ago. \(age == .fresh ? "Fresh" : "Aging: \(ageLabel)")")
+            .accessibilityHint("Press Return to edit, or Command-Return to complete")
+            .accessibilityAction(named: "Edit") { beginEdit() }
+            .accessibilityAction(named: "Complete") { complete() }
+            .accessibilityAction(named: "Reset Aging") { resetAging() }
+    }
+    private var framedChip: some View {
         chipContent
             .background {
                 GeometryReader { proxy in
@@ -979,89 +1352,58 @@ struct ThoughtChip: View {
                 Button("Edit") { beginEdit() }
                 Button("Reset Aging") { resetAging() }
             }
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel("\(thought.text)")
-            .accessibilityValue("Added \(timestamp) ago. \(age == .fresh ? "Fresh" : "Aging: \(ageLabel)")")
-            .accessibilityHint("Press Return to edit, or Command-Return to complete")
-            .accessibilityAction(named: "Edit") { beginEdit() }
-            .accessibilityAction(named: "Reset Aging") { resetAging() }
     }
 
-    @ViewBuilder
-    private var chipContent: some View {
-        Group {
-            if editing {
-                TextField("Thought", text: $draft).textFieldStyle(.roundedBorder).frame(maxWidth: 360)
-                    .focused($focus, equals: .thoughtEdit(thought.id)).onSubmit { save() }.onExitCommand { cancelEdit() }
-                    .accessibilityLabel("Edit thought \(thought.text)").accessibilityHint("Press Return to save, or Escape to cancel")
-            } else {
-                ThoughtBubble(age: age) {
-                    HStack(spacing: 6) {
-                        // Keep the lane scan-friendly. The complete value remains
-                        // on `thought.text` (and is still exposed to MCP); only
-                        // this visual label is shortened when it cannot fit.
-                        Text(thought.text)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
-                            .frame(maxWidth: 292, alignment: .leading)
-                        Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(LanesTheme.secondaryText(colorScheme))
-                    }
-                }
-                .overlay(alignment: .trailing) {
-                    if hovering {
-                        Button(action: complete) { Image(systemName: "checkmark").font(.caption.weight(.bold)) }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.primary)
-                            .frame(width: 18, height: 18)
-                            .background(.regularMaterial, in: Circle())
-                            .overlay(Circle().strokeBorder(.primary.opacity(0.12)))
-                            .offset(x: 8)
-                            .pointingHandCursor()
-                            .accessibilityLabel("Complete thought")
-                            .transition(.opacity)
-                    }
-                }
-                .overlay(alignment: .bottomLeading) {
-                    if hovering && isThoughtTruncated {
-                        Text(thought.text)
-                            .font(.callout)
-                            .foregroundStyle(.primary)
-                            .multilineTextAlignment(.leading)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: 340, alignment: .leading)
-                            .padding(.horizontal, 11)
-                            .padding(.vertical, 8)
-                            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.14)))
-                            .shadow(color: .black.opacity(0.18), radius: 10, y: 5)
-                            .offset(y: 12)
-                            .zIndex(20)
-                            .allowsHitTesting(false)
-                            .transition(.opacity.combined(with: .scale(scale: 0.98, anchor: .topLeading)))
-                    }
-                }
-                .frame(maxWidth: 360, alignment: .leading)
-                // Lift the whole chip while its detail bubble is visible so it
-                // can sit above adjacent chips in the flow layout.
-                .zIndex(hovering ? 10 : 0)
-                .onHover { hovering = $0 }
-                .pointingHandCursor()
-                .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hovering)
-                .onTapGesture { selectedThoughtID = thought.id; focus = .thought(thought.id) }
-                .draggable(thought.id.uuidString) {
-                    ThoughtDragPreview(text: thought.text, timestamp: timestamp, age: age)
-                }
-                .focusable()
-                .focusEffectDisabled()
-                .focused($focus, equals: .thought(thought.id))
-                .onKeyPress(.return) { beginEdit(); return .handled }
-            }
+    @ViewBuilder private var chipContent: some View {
+        if editing { thoughtEditor } else { displayChip }
+    }
+    private var thoughtEditor: some View {
+        TextField("Thought", text: $draft).textFieldStyle(.roundedBorder).frame(maxWidth: 360)
+            .focused($focus, equals: .thoughtEdit(thought.id)).onSubmit { save() }.onExitCommand { cancelEdit() }
+            .onAppear { DispatchQueue.main.async { focus = .thoughtEdit(thought.id) } }
+            .accessibilityLabel("Edit thought \(thought.text)").accessibilityHint("Press Return to save, or Escape to cancel")
+    }
+    private var displayChip: some View {
+        thoughtBubble
+            .overlay(alignment: .trailing) { if hovering { completionButton } }
+            .overlay { keyboardFocusOverlay }
+            .overlay(alignment: .bottomLeading) { if hovering && isThoughtTruncated { fullTextOverlay } }
+            .frame(maxWidth: 360, alignment: .leading).zIndex(hovering ? 10 : 0)
+            .onHover { hovering = $0 }.pointingHandCursor()
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hovering)
+            .onTapGesture { selection.select(.thought(thought.id), with: .pointer); focus = .thought(thought.id) }
+            .draggable(thought.id.uuidString) { ThoughtDragPreview(text: thought.text, timestamp: timestamp, age: age) }
+            .focusable().focusEffectDisabled().focused($focus, equals: .thought(thought.id))
+            .onKeyPress(.return) { beginEdit(); return .handled }
+    }
+    private var thoughtBubble: some View {
+        ThoughtBubble(age: age) { HStack(spacing: 6) { Text(thought.text).lineLimit(1).truncationMode(.tail).frame(maxWidth: 292, alignment: .leading); Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(LanesTheme.secondaryText(colorScheme)) } }
+    }
+    private var completionButton: some View {
+        Button(action: complete) { Image(systemName: "checkmark").font(.caption.weight(.bold)) }.buttonStyle(.plain).foregroundStyle(.primary).frame(width: 18, height: 18).background(.regularMaterial, in: Circle()).overlay(Circle().strokeBorder(.primary.opacity(0.12))).offset(x: 8).pointingHandCursor().accessibilityLabel("Complete thought")
+    }
+    @ViewBuilder private var keyboardFocusOverlay: some View {
+        if focus == .thought(thought.id) && selection.target == .thought(thought.id) && selection.showsKeyboardFocus {
+            Capsule(style: .continuous).fill(LanesTheme.keyboardFocus(colorScheme).opacity(0.08)).padding(-3).allowsHitTesting(false)
+            Capsule(style: .continuous).stroke(LanesTheme.keyboardFocus(colorScheme), lineWidth: 2).padding(-3).allowsHitTesting(false)
         }
     }
+    private var fullTextOverlay: some View {
+        Text(thought.text).font(.callout).foregroundStyle(.primary).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).frame(maxWidth: 340, alignment: .leading).padding(.horizontal, 11).padding(.vertical, 8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.14))).shadow(color: .black.opacity(0.18), radius: 10, y: 5).offset(y: 12).zIndex(20).allowsHitTesting(false)
+    }
     private var ageLabel: String { ThoughtAging.label(for: thought, settings: agingStore.settings, now: now).map { "\($0) old" } ?? "fresh" }
-    private func beginEdit() { selectedThoughtID = thought.id; draft = thought.text; editing = true; focus = .thoughtEdit(thought.id) }
+    private func beginEdit() {
+        selection.select(.thought(thought.id), with: .keyboard)
+        draft = thought.text
+        editing = true
+        DispatchQueue.main.async { focus = .thoughtEdit(thought.id) }
+    }
     private func cancelEdit() { editing = false; draft = ""; focus = .thought(thought.id) }
-    private func complete() { withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { ThoughtManagement.complete(thought, now: .now); try? context.save(); LanesNotificationBus.thoughtChanged(thought.id) }; selectedThoughtID = nil; focus = nil }
+    private func complete() {
+        selection.select(.thought(thought.id), with: .pointer)
+        focus = .thought(thought.id)
+        LanesCommandDispatcher.perform(.complete)
+    }
     private func resetAging() { ThoughtManagement.resetAging(thought, now: .now); try? context.save(); LanesNotificationBus.thoughtChanged(thought.id) }
     private func save() { guard ThoughtManagement.edit(thought, rawText: draft, now: .now) else { return }; try? context.save(); LanesNotificationBus.thoughtChanged(thought.id); editing = false; focus = .thought(thought.id) }
 }

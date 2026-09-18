@@ -125,4 +125,68 @@ final class LaneManagementTests: XCTestCase {
         XCTAssertEqual(PanelSelection.nextIndex(current: 0, direction: .down, count: 4), 1)
         XCTAssertEqual(PanelSelection.nextIndex(current: 2, direction: .up, count: 4), 1)
     }
+
+    func testKeyboardSelectionIsOnlyVisibleForKeyboardInput() {
+        let id = UUID()
+        var selection = PanelSelection()
+        selection.select(.thought(id), with: .pointer)
+        XCTAssertFalse(selection.showsKeyboardFocus)
+        selection.select(.thought(id), with: .keyboard)
+        XCTAssertTrue(selection.showsKeyboardFocus)
+        XCTAssertEqual(selection.thoughtID, id)
+    }
+
+    func testBoardArrowsRespectLaneBoundariesAndEmptyLanes() {
+        let a = UUID(), b = UUID(), c = UUID(), x = UUID(), y = UUID(), z = UUID()
+        let lanes = [BoardLane(id: a, thoughts: [x, y]), BoardLane(id: b, thoughts: []), BoardLane(id: c, thoughts: [z])]
+        XCTAssertEqual(BoardNavigation.target(from: nil, direction: .down, lanes: lanes), .lane(a))
+        XCTAssertEqual(BoardNavigation.target(from: .lane(a), direction: .right, lanes: lanes), .addThought(a))
+        XCTAssertEqual(BoardNavigation.target(from: .addThought(a), direction: .right, lanes: lanes), .thought(x))
+        XCTAssertEqual(BoardNavigation.target(from: .thought(x), direction: .left, lanes: lanes), .addThought(a))
+        XCTAssertEqual(BoardNavigation.target(from: .thought(y), direction: .right, lanes: lanes), .thought(y))
+        XCTAssertEqual(BoardNavigation.target(from: .thought(y), direction: .down, lanes: lanes), .addThought(b))
+        XCTAssertEqual(BoardNavigation.target(from: .lane(b), direction: .right, lanes: lanes), .addThought(b))
+        XCTAssertEqual(BoardNavigation.target(from: .addThought(b), direction: .left, lanes: lanes), .lane(b))
+        XCTAssertEqual(BoardNavigation.target(from: .lane(b), direction: .down, lanes: lanes), .lane(c))
+        XCTAssertEqual(BoardNavigation.target(from: .thought(z), direction: .down, lanes: lanes), .thought(z))
+        XCTAssertNil(BoardNavigation.target(from: nil, direction: .left, lanes: []))
+    }
+
+    func testVerticalNavigationPreservesThoughtColumnAndClampsShortLanes() {
+        let a = UUID(), b = UUID(), x = UUID(), y = UUID(), z = UUID()
+        let lanes = [BoardLane(id: a, thoughts: [x, y]), BoardLane(id: b, thoughts: [z])]
+        XCTAssertEqual(BoardNavigation.target(from: .thought(y), direction: .down, lanes: lanes), .thought(z))
+        XCTAssertEqual(BoardNavigation.target(from: .thought(z), direction: .up, lanes: lanes), .thought(x))
+        XCTAssertEqual(BoardNavigation.target(from: .lane(b), direction: .up, lanes: lanes), .lane(a))
+    }
+
+    func testRemovalRecoveryIsLocalAndSelectsNextThenPreviousThenHeader() {
+        let a = UUID(), x = UUID(), y = UUID(), z = UUID()
+        let lane = BoardLane(id: a, thoughts: [x, y, z])
+        XCTAssertEqual(BoardNavigation.afterRemoving(y, from: lane), .thought(z))
+        XCTAssertEqual(BoardNavigation.afterRemoving(z, from: lane), .thought(y))
+        XCTAssertEqual(BoardNavigation.afterRemoving(x, from: BoardLane(id: a, thoughts: [x])), .lane(a))
+    }
+
+    func testCommandMatchingUsesExactModifiers() throws {
+        func event(_ flags: NSEvent.ModifierFlags, _ key: UInt16, _ characters: String) throws -> NSEvent {
+            try XCTUnwrap(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil, characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: key))
+        }
+        XCTAssertEqual(PanelCommand.matching(try event(.command, 45, "n")), .newThought)
+        XCTAssertEqual(PanelCommand.matching(try event([.command, .shift], 45, "N")), .newLane)
+        XCTAssertEqual(PanelCommand.matching(try event(.command, 36, "\r")), .complete)
+        XCTAssertEqual(PanelCommand.matching(try event([], 36, "\r")), .edit)
+        XCTAssertNil(PanelCommand.matching(try event([.command, .control], 45, "n")))
+        XCTAssertNil(PanelCommand.matching(try event([], 45, "n")))
+    }
+
+    func testKeyboardThoughtReorderingMovesOnlyWhenThereIsAnAdjacentThought() {
+        let lane = Lane(name: "Work", order: 0)
+        let first = Thought(text: "First", lane: lane, order: 3)
+        let second = Thought(text: "Second", lane: lane, order: 2)
+        let third = Thought(text: "Third", lane: lane, order: 1)
+        XCTAssertTrue(ThoughtManagement.moveWithinLane(second, among: [first, second, third], direction: .up, now: .now))
+        XCTAssertEqual([first, second, third].sorted { ($0.order ?? 0) > ($1.order ?? 0) }.map(\.text), ["Second", "First", "Third"])
+        XCTAssertFalse(ThoughtManagement.moveWithinLane(second, among: [second, first, third], direction: .up, now: .now))
+    }
 }

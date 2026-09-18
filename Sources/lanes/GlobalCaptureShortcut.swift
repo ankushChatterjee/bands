@@ -5,16 +5,16 @@ struct GlobalShortcutEvent: Equatable {
     let keyCode: UInt32
     let modifiers: UInt32
 
-    static let optionSpace = GlobalShortcutEvent(keyCode: UInt32(kVK_Space), modifiers: UInt32(optionKey))
+    static let optionL = GlobalShortcutEvent(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(optionKey))
 }
 
 enum GlobalShortcutParser {
     static func parse(keyCode: UInt16, modifierFlags: NSEvent.ModifierFlags) -> GlobalShortcutEvent? {
         let disallowed = modifierFlags.intersection([.command, .control, .shift])
-        guard keyCode == UInt16(kVK_Space), modifierFlags.contains(.option), disallowed.isEmpty else {
+        guard keyCode == UInt16(kVK_ANSI_L), modifierFlags.contains(.option), disallowed.isEmpty else {
             return nil
         }
-        return .optionSpace
+        return .optionL
     }
 }
 
@@ -37,7 +37,7 @@ final class GlobalCaptureShortcutController {
     private(set) var state: GlobalShortcutRegistrationState = .idle
 
     init(registrar: GlobalShortcutRegistering = CarbonGlobalShortcutRegistrar(),
-         shortcut: GlobalShortcutEvent = .optionSpace,
+         shortcut: GlobalShortcutEvent = .optionL,
          action: @escaping () -> Void) {
         self.registrar = registrar
         self.shortcut = shortcut

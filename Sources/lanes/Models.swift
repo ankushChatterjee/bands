@@ -104,11 +104,138 @@ enum LaneNameValidation: Equatable {
 
 enum PanelMoveDirection { case up, down }
 
-enum PanelSelection {
+enum BoardDirection { case left, right, up, down }
+
+struct BoardLane: Equatable {
+    let id: UUID
+    let thoughts: [UUID]
+    /// Whether the lane renders its + control after the thought bubbles.
+    var thoughtsAtEnd: Bool = false
+}
+
+enum BoardNavigation {
+    static func target(from target: PanelSelection.Target?, direction: BoardDirection, lanes: [BoardLane]) -> PanelSelection.Target? {
+        guard let first = lanes.first else { return nil }
+        guard let row = lanes.firstIndex(where: { lane in
+            target == .lane(lane.id) || target == .addThought(lane.id) || lane.thoughts.contains(where: { target == .thought($0) })
+        }) else { return .lane(first.id) }
+        let lane = lanes[row]
+        let column = lane.thoughts.firstIndex(where: { target == .thought($0) })
+        let isAddThought = target == .addThought(lane.id)
+        switch direction {
+        case .left:
+            if isAddThought {
+                return lane.thoughtsAtEnd ? (lane.thoughts.last.map(PanelSelection.Target.thought) ?? .lane(lane.id)) : .lane(lane.id)
+            }
+            guard let column else { return .lane(lane.id) }
+            if column > 0 { return .thought(lane.thoughts[column - 1]) }
+            return lane.thoughtsAtEnd ? .lane(lane.id) : .addThought(lane.id)
+        case .right:
+            if isAddThought {
+                return lane.thoughts.first.map(PanelSelection.Target.thought) ?? target
+            }
+            guard !lane.thoughts.isEmpty else { return .addThought(lane.id) }
+            guard let column else { return lane.thoughtsAtEnd ? .thought(lane.thoughts[0]) : .addThought(lane.id) }
+            if column < lane.thoughts.count - 1 { return .thought(lane.thoughts[column + 1]) }
+            return lane.thoughtsAtEnd ? .addThought(lane.id) : .thought(lane.thoughts[column])
+        case .up, .down:
+            let nextRow = max(0, min(lanes.count - 1, row + (direction == .up ? -1 : 1)))
+            guard nextRow != row else { return target }
+            let next = lanes[nextRow]
+            if isAddThought { return .addThought(next.id) }
+            guard let column else { return .lane(next.id) }
+            guard !next.thoughts.isEmpty else { return .addThought(next.id) }
+            return .thought(next.thoughts[min(column, next.thoughts.count - 1)])
+        }
+    }
+
+    static func afterRemoving(_ id: UUID, from lane: BoardLane) -> PanelSelection.Target {
+        guard let index = lane.thoughts.firstIndex(of: id) else { return .lane(lane.id) }
+        let remaining = lane.thoughts.filter { $0 != id }
+        return remaining.isEmpty ? .lane(lane.id) : .thought(remaining[min(index, remaining.count - 1)])
+    }
+}
+
+/// The panel keeps the selected model separate from how it was selected. This
+/// lets keyboard users receive a visible focus treatment without making a
+/// pointer click look selected.
+struct PanelSelection: Equatable {
+    enum Target: Hashable { case lane(UUID), thought(UUID), addThought(UUID) }
+    enum InputModality { case keyboard, pointer }
+
+    var target: Target?
+    var modality: InputModality = .pointer
+
+    var thoughtID: UUID? {
+        guard case .thought(let id) = target else { return nil }
+        return id
+    }
+
+    var laneID: UUID? {
+        switch target {
+        case .lane(let id), .addThought(let id): return id
+        default: return nil
+        }
+    }
+
+    var showsKeyboardFocus: Bool { target != nil && modality == .keyboard }
+
+    mutating func select(_ target: Target?, with modality: InputModality) {
+        self.target = target
+        self.modality = modality
+    }
+
     static func nextIndex(current: Int?, direction: PanelMoveDirection, count: Int) -> Int? {
         guard count > 0 else { return nil }
         let index = current ?? (direction == .down ? -1 : count)
         return max(0, min(count - 1, index + (direction == .down ? 1 : -1)))
+    }
+}
+
+enum PanelCommand: String, CaseIterable {
+    case quickCapture, newThought, newLane, openSettings
+    case complete, edit, resetAging, move, moveEarlier, moveLater, destructive
+
+    var title: String {
+        switch self {
+        case .quickCapture: "Quick Capture"
+        case .newThought: "New Thought"
+        case .newLane: "New Lane"
+        case .openSettings: "Settings…"
+        case .complete: "Complete Thought"
+        case .edit: "Edit"
+        case .resetAging: "Reset Aging"
+        case .move: "Move Thought…"
+        case .moveEarlier: "Move Earlier"
+        case .moveLater: "Move Later"
+        case .destructive: "Release or Delete"
+        }
+    }
+
+    var shortcut: String {
+        switch self {
+        case .quickCapture: "⌥L"
+        case .newThought: "⌘N"
+        case .newLane: "⇧⌘N"
+        case .openSettings: "⌘,"
+        case .complete: "⌘↩"
+        case .edit: "↩"
+        case .resetAging: "⌥⌘R"
+        case .move: "⌥⌘M"
+        case .moveEarlier: "⌥⌘["
+        case .moveLater: "⌥⌘]"
+        case .destructive: "⌘⌫"
+        }
+    }
+
+    static let reference: [PanelCommand] = [.quickCapture, .newThought, .newLane, .complete, .edit, .resetAging, .move, .moveEarlier, .moveLater, .destructive, .openSettings]
+}
+
+enum LanesCommandDispatcher {
+    static let notification = Notification.Name("lanes.panelCommand")
+
+    static func perform(_ command: PanelCommand) {
+        NotificationCenter.default.post(name: notification, object: command)
     }
 }
 
@@ -202,6 +329,14 @@ enum ThoughtManagement {
         }
         thought.lane = lane
         thought.lastTouchedAt = now
+    }
+
+    static func moveWithinLane(_ thought: Thought, among thoughts: [Thought], direction: PanelMoveDirection, now: Date) -> Bool {
+        guard let current = thoughts.firstIndex(where: { $0.id == thought.id }) else { return false }
+        let destination = direction == .up ? current - 1 : current + 1
+        guard thoughts.indices.contains(destination) else { return false }
+        reorder(thought, to: thought.lane!, among: thoughts, at: destination, now: now)
+        return true
     }
 
     static func complete(_ thought: Thought, now: Date) {
