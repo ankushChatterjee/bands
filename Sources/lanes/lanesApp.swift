@@ -8,6 +8,7 @@ extension PanelCommand {
         case .newThought, .newLane: "n"
         case .openSettings: ","
         case .copy: "c"
+        case .editDescription: "d"
         case .complete, .edit: .return
         case .resetAging: "r"
         case .move: "m"
@@ -23,6 +24,7 @@ extension PanelCommand {
         case .newLane: [.command, .shift]
         case .copy: [.command]
         case .resetAging, .move, .moveEarlier, .moveLater: [.command, .option]
+        case .editDescription: [.command, .shift]
         default: [.command]
         }
     }

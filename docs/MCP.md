@@ -41,3 +41,7 @@ The bridge owns all SwiftData work and must run it on the app's main actor.
 Suggested arguments are documented by the MCP `tools/list` response. The
 helper itself never writes to the app store and never emits diagnostics on
 stdout, preserving the MCP transport.
+
+Lane objects returned by `list_lanes` and `list_thoughts` include `id`, `name`,
+`description`, `order`, and `createdAt`. `description` is `null` for lanes
+created before lane descriptions were added or for lanes without a description.

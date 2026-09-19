@@ -200,7 +200,9 @@ struct RootView: View {
     @Environment(\.modelContext) private var context
     @Query(sort: \Lane.order) private var lanes: [Lane]
     @State private var newLane = ""
+    @State private var newLaneDescription = ""
     @State private var addingLane = false
+    @State private var enteringLaneDescription = false
     @State private var composingLaneID: UUID?
     @State private var selection = PanelSelection()
     @State private var draggingLaneID: UUID?
@@ -218,10 +220,10 @@ struct RootView: View {
     private let timestampRefreshTimer = Timer.publish(every: 5 * 60, on: .main, in: .common).autoconnect()
 
     enum PanelFocus: Hashable {
-        case newLane, lane(UUID), laneAdd(UUID), laneInput(UUID), laneRename(UUID), thought(UUID), thoughtEdit(UUID)
+        case newLane, newLaneDescription, lane(UUID), laneAdd(UUID), laneInput(UUID), laneRename(UUID), laneDescription(UUID), thought(UUID), thoughtEdit(UUID)
         var isEditing: Bool {
             switch self {
-            case .newLane, .laneInput, .laneRename, .thoughtEdit: true
+            case .newLane, .newLaneDescription, .laneInput, .laneRename, .laneDescription, .thoughtEdit: true
             default: false
             }
         }
@@ -344,6 +346,8 @@ struct RootView: View {
                     if selection.target != .addThought(id) { selection.select(.addThought(id), with: .keyboard) }
                 case .laneInput(let id), .laneRename(let id):
                     if selection.target != .lane(id) { selection.select(.lane(id), with: .keyboard) }
+                case .laneDescription(let id):
+                    if selection.target != .lane(id) { selection.select(.lane(id), with: .keyboard) }
                 default: break
                 }
             }
@@ -400,7 +404,7 @@ struct RootView: View {
 
     private var floatingActions: some View {
         HStack(spacing: 6) {
-            if addingLane {
+            if addingLane && !enteringLaneDescription {
                 TextField("", text: $newLane,
                           prompt: Text("New lane name…").foregroundStyle(LanesTheme.secondaryText(colorScheme)))
                     .textFieldStyle(.plain)
@@ -411,10 +415,25 @@ struct RootView: View {
                     .background(LanesTheme.controlFill(colorScheme), in: Capsule(style: .continuous))
                     .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
                     .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
-                    .onSubmit { addLane() }.focused($focus, equals: .newLane)
+                    .onSubmit { beginLaneDescription() }.focused($focus, equals: .newLane)
                     .onExitCommand { cancelNewLane() }
                     .accessibilityLabel("New lane name")
-                    .accessibilityHint("Press Return to create the lane, or Escape to cancel")
+                    .accessibilityHint("Press Return to enter a description, or Escape to cancel")
+            } else if addingLane && enteringLaneDescription {
+                TextField("", text: $newLaneDescription,
+                          prompt: Text("Lane description…").foregroundStyle(LanesTheme.secondaryText(colorScheme)))
+                    .textFieldStyle(.plain)
+                    .foregroundStyle(.primary)
+                    .frame(width: 190)
+                    .padding(.horizontal, 11)
+                    .padding(.vertical, 8)
+                    .background(LanesTheme.controlFill(colorScheme), in: Capsule(style: .continuous))
+                    .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
+                    .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
+                    .onSubmit { addLane() }.focused($focus, equals: .newLaneDescription)
+                    .onExitCommand { cancelNewLane() }
+                    .accessibilityLabel("Lane description")
+                    .accessibilityHint("Enter a one-line description, then press Return to create the lane")
             } else if draggingLaneID == nil {
                 Button { beginNewLane() } label: {
                     Text("+ lane")
@@ -464,18 +483,38 @@ struct RootView: View {
         NSApp.activate(ignoringOtherApps: true)
         showingSettings = true
     }
-    private func beginNewLane() { newLane = ""; addingLane = true; focus = .newLane }
-    private func cancelNewLane() { addingLane = false; newLane = ""; restoreSelection() }
+    private func beginNewLane() {
+        newLane = ""
+        newLaneDescription = ""
+        enteringLaneDescription = false
+        addingLane = true
+        focus = .newLane
+    }
+    private func beginLaneDescription() {
+        guard case .valid = LaneManagement.validateName(newLane, existingNames: lanes.map(\.name)) else { return }
+        enteringLaneDescription = true
+        DispatchQueue.main.async { focus = .newLaneDescription }
+    }
+    private func cancelNewLane() {
+        addingLane = false
+        enteringLaneDescription = false
+        newLane = ""
+        newLaneDescription = ""
+        restoreSelection()
+    }
     private func addLane() {
         guard case .valid(let name) = LaneManagement.validateName(newLane, existingNames: lanes.map(\.name)) else { return }
-        let lane = Lane(name: name, order: 0)
+        let description = newLaneDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        let lane = Lane(name: name, descriptionText: description.isEmpty ? nil : description, order: 0)
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.28, extraBounce: 0.08)) {
             LaneManagement.insert(lane, into: lanes, atEnd: InsertionPreferences.lanesAtEnd)
             context.insert(lane)
             try? context.save()
         }
         addingLane = false
+        enteringLaneDescription = false
         newLane = ""
+        newLaneDescription = ""
         select(.lane(lane.id))
     }
     private func focusQuickCapture() {
@@ -493,6 +532,7 @@ struct RootView: View {
         var available: Set<PanelCommand> = []
         if !modalIsPresented && focus?.isEditing != true {
             available = [.quickCapture, .newThought, .newLane, .openSettings]
+            if selection.laneID != nil { available.insert(.editDescription) }
             if case .addThought = selection.target {
                 // Return on the focused + opens its inline composer.
                 available.insert(.edit)
@@ -580,6 +620,10 @@ struct RootView: View {
         case .newLane: beginNewLane()
         case .openSettings: openSettings()
         case .copy: if let thought = selectedThought { ThoughtClipboard.copy(thought.text) }
+        case .editDescription:
+            if let laneID = selection.laneID {
+                NotificationCenter.default.post(name: .lanesBeginEditDescription, object: laneID)
+            }
         case .complete: if let thought = selectedThought { complete(thought) }
         case .edit:
             if case .addThought = selection.target {
@@ -1036,6 +1080,7 @@ private struct ThresholdStepper: View {
 extension Notification.Name {
     static let lanesPanelDidOpen = Notification.Name("lanes.panelDidOpen")
     static let lanesBeginEdit = Notification.Name("lanes.beginEdit")
+    static let lanesBeginEditDescription = Notification.Name("lanes.beginEditDescription")
 }
 
 struct LaneRow: View {
@@ -1058,7 +1103,7 @@ struct LaneRow: View {
     @AppStorage(InsertionPreferences.thoughtsAtEndKey) private var thoughtsAtEnd = false
     let onDelete: (Lane) -> Void
     let onMoveLane: (Lane, Lane) -> Void
-    @State private var input = ""; @State private var editing = false; @State private var name = ""; @State private var showingDeleteConfirmation = false; @State private var hoveringAdd = false; @State private var hoveringLane = false; @State private var dropTargeted = false; @State private var thoughtFrames: [UUID: CGRect] = [:]
+    @State private var input = ""; @State private var editing = false; @State private var name = ""; @State private var editingDescription = false; @State private var descriptionDraft = ""; @State private var showingDeleteConfirmation = false; @State private var hoveringAdd = false; @State private var hoveringLane = false; @State private var dropTargeted = false; @State private var thoughtFrames: [UUID: CGRect] = [:]
     @State private var insertionIndex: Int?
     @State private var laneDropAfter = false
     var thoughts: [Thought] {
@@ -1113,7 +1158,7 @@ struct LaneRow: View {
             isTargeted: $dropTargeted,
             insertionIndex: $insertionIndex
         ))
-        .contextMenu { Button("Rename") { beginRename() }; Button("Add Thought") { beginAdd() }; Divider(); Button("Delete Lane", role: .destructive, action: requestDeletion) }
+        .contextMenu { Button("Rename") { beginRename() }; Button("Edit Description") { beginEditDescription() }; Button("Add Thought") { beginAdd() }; Divider(); Button("Delete Lane", role: .destructive, action: requestDeletion) }
         .confirmationDialog("Delete \"\(lane.name)\"?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) { Button("Delete Lane", role: .destructive) { onDelete(lane) }; Button("Cancel", role: .cancel) {} } message: { Text("This will delete its \(thoughts.count) active thought\(thoughts.count == 1 ? "" : "s").") }
         .onChange(of: focus) { _, focus in
             if focus == .laneRename(lane.id), !editing { beginRename() }
@@ -1122,6 +1167,10 @@ struct LaneRow: View {
             guard let target = notification.object as? PanelSelection.Target,
                   target == .lane(lane.id) else { return }
             beginRename()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .lanesBeginEditDescription)) { notification in
+            guard let target = notification.object as? UUID, target == lane.id else { return }
+            beginEditDescription()
         }
     }
     private var laneFlow: some View {
@@ -1145,6 +1194,22 @@ struct LaneRow: View {
             if editing {
                 TextField("Lane name", text: $name).textFieldStyle(.plain).focused($focus, equals: .laneRename(lane.id)).onSubmit { saveName() }.onExitCommand { cancelRename() }
                     .onAppear { DispatchQueue.main.async { focus = .laneRename(lane.id) } }
+            } else if editingDescription {
+                ZStack(alignment: .leading) {
+                    TextField("", text: $descriptionDraft)
+                        .textFieldStyle(.plain)
+                        .foregroundStyle(LanesTheme.laneText(colorScheme))
+                    if descriptionDraft.isEmpty {
+                        Text("Lane description")
+                            .foregroundStyle(LanesTheme.laneText(colorScheme).opacity(0.55))
+                            .allowsHitTesting(false)
+                    }
+                }
+                    .frame(minWidth: 220)
+                    .focused($focus, equals: .laneDescription(lane.id))
+                    .onSubmit { saveDescription() }
+                    .onExitCommand { cancelDescriptionEdit() }
+                    .onAppear { DispatchQueue.main.async { focus = .laneDescription(lane.id) } }
             } else {
                 Text(lane.name)
                     .contentShape(Rectangle())
@@ -1169,14 +1234,29 @@ struct LaneRow: View {
         .focusEffectDisabled().accessibilityLabel("Lane \(lane.name)")
     }
     private func beginRename() {
+        editingDescription = false
         name = lane.name
         editing = true
         DispatchQueue.main.async { focus = .laneRename(lane.id) }
+    }
+    private func beginEditDescription() {
+        editing = false
+        descriptionDraft = lane.descriptionText ?? ""
+        editingDescription = true
+        selection.select(.lane(lane.id), with: .keyboard)
+        DispatchQueue.main.async { focus = .laneDescription(lane.id) }
     }
     private func requestDeletion() {
         showingDeleteConfirmation = true
     }
     private func cancelRename() { editing = false; name = ""; focus = .lane(lane.id) }
+    private func cancelDescriptionEdit() { editingDescription = false; descriptionDraft = ""; focus = .lane(lane.id) }
+    private func saveDescription() {
+        let value = descriptionDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        lane.descriptionText = value.isEmpty ? nil : value
+        try? context.save()
+        cancelDescriptionEdit()
+    }
     private func saveName() { guard case .valid(let value) = LaneManagement.validateName(name, existingNames: lanes.map(\.name), excluding: lane.name) else { return }; lane.name = value; try? context.save(); cancelRename() }
     private func beginAdd() {
         input = ""

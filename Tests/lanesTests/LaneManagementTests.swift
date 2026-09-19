@@ -32,6 +32,28 @@ final class LaneManagementTests: XCTestCase {
         XCTAssertEqual(try context.fetchCount(FetchDescriptor<Lane>()), 0)
     }
 
+    func testLaneDescriptionPersists() throws {
+        let context = try makeContext()
+        let lane = Lane(name: "Work", descriptionText: "Projects, coding, and professional ideas", order: 0)
+        context.insert(lane)
+        try context.save()
+
+        let persisted = try XCTUnwrap(try context.fetch(FetchDescriptor<Lane>()).first)
+        XCTAssertEqual(persisted.descriptionText, "Projects, coding, and professional ideas")
+    }
+
+    func testMCPLanePayloadIncludesDescription() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(for: Lane.self, Thought.self, configurations: configuration)
+        let context = ModelContext(container)
+        context.insert(Lane(name: "Work", descriptionText: "Projects and coding", order: 0))
+        try context.save()
+
+        let result = LanesCommandService(container: container).call(name: "lanes/list", arguments: [:])
+        let lanes = try XCTUnwrap(result["lanes"] as? [[String: Any]])
+        XCTAssertEqual(lanes.first?["description"] as? String, "Projects and coding")
+    }
+
     func testTopAndInlineCapturePersistToTheRequestedLane() throws {
         let context = try makeContext()
         let lanes = [
@@ -175,6 +197,7 @@ final class LaneManagementTests: XCTestCase {
         XCTAssertEqual(PanelCommand.matching(try event(.command, 45, "n")), .newThought)
         XCTAssertEqual(PanelCommand.matching(try event(.command, 8, "c")), .copy)
         XCTAssertEqual(PanelCommand.matching(try event([.command, .shift], 45, "N")), .newLane)
+        XCTAssertEqual(PanelCommand.matching(try event([.command, .shift], 2, "D")), .editDescription)
         XCTAssertEqual(PanelCommand.matching(try event(.command, 36, "\r")), .complete)
         XCTAssertEqual(PanelCommand.matching(try event([], 36, "\r")), .edit)
         XCTAssertNil(PanelCommand.matching(try event([.command, .control], 45, "n")))

@@ -42,7 +42,15 @@ final class LanesCommandService {
         guard let thought = try thoughts(context).first(where: { $0.id == id }) else { throw BridgeError(message: "Thought not found") }
         return thought
     }
-    private func laneJSON(_ lane: Lane) -> [String: Any] { ["id": lane.id.uuidString, "name": lane.name, "order": lane.order, "createdAt": ISO8601DateFormatter().string(from: lane.createdAt)] }
+    private func laneJSON(_ lane: Lane) -> [String: Any] {
+        [
+            "id": lane.id.uuidString,
+            "name": lane.name,
+            "description": lane.descriptionText as Any,
+            "order": lane.order,
+            "createdAt": ISO8601DateFormatter().string(from: lane.createdAt)
+        ]
+    }
     private func thoughtJSON(_ thought: Thought) -> [String: Any] {
         let age = ThoughtAging.age(for: thought)
         let ageMinutes = max(0, Int(Date.now.timeIntervalSince(thought.createdAt) / 60))

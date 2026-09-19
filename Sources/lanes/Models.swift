@@ -5,11 +5,14 @@ import SwiftData
 @Model final class Lane {
     var id: UUID
     var name: String
+    // Optional keeps existing SwiftData stores migratable while allowing new
+    // lanes to provide semantic context for automatic categorization.
+    var descriptionText: String?
     var order: Int
     var createdAt: Date
 
-    init(id: UUID = UUID(), name: String, order: Int, createdAt: Date = .now) {
-        self.id = id; self.name = name; self.order = order; self.createdAt = createdAt
+    init(id: UUID = UUID(), name: String, descriptionText: String? = nil, order: Int, createdAt: Date = .now) {
+        self.id = id; self.name = name; self.descriptionText = descriptionText; self.order = order; self.createdAt = createdAt
     }
 }
 
@@ -194,7 +197,7 @@ struct PanelSelection: Equatable {
 
 enum PanelCommand: String, CaseIterable {
     case quickCapture, newThought, newLane, openSettings
-    case copy
+    case copy, editDescription
     case complete, edit, resetAging, move, moveEarlier, moveLater, destructive
 
     var title: String {
@@ -204,6 +207,7 @@ enum PanelCommand: String, CaseIterable {
         case .newLane: "New Lane"
         case .openSettings: "Settings…"
         case .copy: "Copy Thought"
+        case .editDescription: "Edit Description"
         case .complete: "Complete Thought"
         case .edit: "Edit"
         case .resetAging: "Reset Aging"
@@ -221,6 +225,7 @@ enum PanelCommand: String, CaseIterable {
         case .newLane: "⇧⌘N"
         case .openSettings: "⌘,"
         case .copy: "⌘C"
+        case .editDescription: "⇧⌘D"
         case .complete: "⌘↩"
         case .edit: "↩"
         case .resetAging: "⌥⌘R"
@@ -231,7 +236,7 @@ enum PanelCommand: String, CaseIterable {
         }
     }
 
-    static let reference: [PanelCommand] = [.quickCapture, .newThought, .newLane, .copy, .complete, .edit, .resetAging, .move, .moveEarlier, .moveLater, .destructive, .openSettings]
+    static let reference: [PanelCommand] = [.quickCapture, .newThought, .newLane, .copy, .editDescription, .complete, .edit, .resetAging, .move, .moveEarlier, .moveLater, .destructive, .openSettings]
 }
 
 enum LanesCommandDispatcher {
