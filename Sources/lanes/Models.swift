@@ -220,7 +220,7 @@ enum PanelCommand: String, CaseIterable {
 
     var shortcut: String {
         switch self {
-        case .quickCapture: "⌥L"
+        case .quickCapture: "⌥Q"
         case .newThought: "⌘N"
         case .newLane: "⇧⌘N"
         case .openSettings: "⌘,"

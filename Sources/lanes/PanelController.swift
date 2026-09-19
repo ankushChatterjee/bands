@@ -104,13 +104,21 @@ final class PanelController: NSObject, NSWindowDelegate {
 
     func attach(to button: NSStatusBarButton?) { statusButton = button }
 
+    private func updateStatusButtonHighlight() {
+        statusButton?.highlight(panel?.isVisible == true)
+    }
+
     deinit {
         if let localMonitor { NSEvent.removeMonitor(localMonitor) }
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor) }
     }
 
     func toggle() {
-        if let panel, panel.isVisible { panel.orderOut(nil); return }
+        if let panel, panel.isVisible {
+            panel.orderOut(nil)
+            updateStatusButtonHighlight()
+            return
+        }
         show()
     }
 
@@ -121,6 +129,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.orderFrontRegardless()
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKey()
+        updateStatusButtonHighlight()
         configureScrollViews(in: panel.contentView)
         DispatchQueue.main.async { [weak self, weak panel] in
             guard let self, let panel else { return }
@@ -178,4 +187,12 @@ final class PanelController: NSObject, NSWindowDelegate {
     }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool { true }
+
+    func windowDidResignKey(_ notification: Notification) {
+        // Outside clicks, Escape, and app deactivation can hide the panel
+        // without going through toggle(). Sync after AppKit finishes hiding it.
+        DispatchQueue.main.async { [weak self] in
+            self?.updateStatusButtonHighlight()
+        }
+    }
 }

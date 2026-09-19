@@ -1,20 +1,37 @@
 import AppKit
 import Carbon.HIToolbox
+import OSLog
 
 struct GlobalShortcutEvent: Equatable {
     let keyCode: UInt32
     let modifiers: UInt32
 
     static let optionL = GlobalShortcutEvent(keyCode: UInt32(kVK_ANSI_L), modifiers: UInt32(optionKey))
+    static let optionQ = GlobalShortcutEvent(keyCode: UInt32(kVK_ANSI_Q), modifiers: UInt32(optionKey))
+}
+
+/// Carbon calls every registered application-level handler for a hotkey event.
+/// Only the registrar that owns the event ID may consume it; the rest must let
+/// it propagate to the matching handler.
+enum CarbonGlobalShortcutRouting {
+    static let signature = OSType(0x4C4E5348) // “LNSH”
+
+    static func shouldHandle(signature: OSType, id: UInt32, registeredID: UInt32?) -> Bool {
+        signature == Self.signature && id == registeredID
+    }
 }
 
 enum GlobalShortcutParser {
     static func parse(keyCode: UInt16, modifierFlags: NSEvent.ModifierFlags) -> GlobalShortcutEvent? {
         let disallowed = modifierFlags.intersection([.command, .control, .shift])
-        guard keyCode == UInt16(kVK_ANSI_L), modifierFlags.contains(.option), disallowed.isEmpty else {
+        guard modifierFlags.contains(.option), disallowed.isEmpty else {
             return nil
         }
-        return .optionL
+        switch keyCode {
+        case UInt16(kVK_ANSI_L): return .optionL
+        case UInt16(kVK_ANSI_Q): return .optionQ
+        default: return nil
+        }
     }
 }
 
@@ -37,7 +54,7 @@ final class GlobalCaptureShortcutController {
     private(set) var state: GlobalShortcutRegistrationState = .idle
 
     init(registrar: GlobalShortcutRegistering = CarbonGlobalShortcutRegistrar(),
-         shortcut: GlobalShortcutEvent = .optionL,
+         shortcut: GlobalShortcutEvent = .optionQ,
          action: @escaping () -> Void) {
         self.registrar = registrar
         self.shortcut = shortcut
@@ -70,12 +87,12 @@ final class GlobalCaptureShortcutController {
 }
 
 private final class CarbonGlobalShortcutRegistrar: GlobalShortcutRegistering {
-    private static let signature = OSType(0x4C4E5348) // “LNSH”
-    private static let id = UInt32(1)
-
+    private static let signature = CarbonGlobalShortcutRouting.signature
+    private static let logger = Logger(subsystem: "com.example.lanes", category: "global-shortcuts")
     private var hotKey: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
     private var handler: (() -> Void)?
+    private var registeredID: UInt32?
 
     func register(_ shortcut: GlobalShortcutEvent, handler: @escaping () -> Void) -> Bool {
         guard hotKey == nil else { return true }
@@ -85,7 +102,7 @@ private final class CarbonGlobalShortcutRegistrar: GlobalShortcutRegistering {
                                       eventKind: UInt32(kEventHotKeyPressed))
         let target = GetApplicationEventTarget()
         let callback: EventHandlerUPP = { _, event, userData in
-            guard let event, let userData else { return noErr }
+            guard let event, let userData else { return OSStatus(eventNotHandledErr) }
             let registrar = Unmanaged<CarbonGlobalShortcutRegistrar>.fromOpaque(userData).takeUnretainedValue()
             var hotKeyID = EventHotKeyID()
             var actualSize = 0
@@ -93,8 +110,11 @@ private final class CarbonGlobalShortcutRegistrar: GlobalShortcutRegistering {
                                            EventParamType(typeEventHotKeyID), nil, MemoryLayout<EventHotKeyID>.size,
                                            &actualSize, &hotKeyID)
             guard status == noErr,
-                  hotKeyID.signature == CarbonGlobalShortcutRegistrar.signature,
-                  hotKeyID.id == CarbonGlobalShortcutRegistrar.id else { return noErr }
+                  CarbonGlobalShortcutRouting.shouldHandle(
+                    signature: hotKeyID.signature,
+                    id: hotKeyID.id,
+                    registeredID: registrar.registeredID
+                  ) else { return OSStatus(eventNotHandledErr) }
             registrar.handler?()
             return noErr
         }
@@ -102,24 +122,33 @@ private final class CarbonGlobalShortcutRegistrar: GlobalShortcutRegistering {
         let handlerStatus = InstallEventHandler(target, callback, 1, &eventType,
                                                 Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
         guard handlerStatus == noErr else {
+            Self.logger.error("Unable to install global-shortcut handler: \(handlerStatus, privacy: .public)")
             self.handler = nil
             return false
         }
 
-        let hotKeyID = EventHotKeyID(signature: Self.signature, id: Self.id)
+        // Each registrar owns one global shortcut. Use the key code as the
+        // event ID so separate Option-L and Option-Q registrars cannot both
+        // handle the same Carbon event.
+        registeredID = shortcut.keyCode
+        let hotKeyID = EventHotKeyID(signature: Self.signature, id: shortcut.keyCode)
         let hotKeyStatus = RegisterEventHotKey(shortcut.keyCode, shortcut.modifiers, hotKeyID,
                                                target, 0, &hotKey)
         guard hotKeyStatus == noErr else {
+            Self.logger.error("Unable to register global shortcut keyCode=\(shortcut.keyCode, privacy: .public), modifiers=\(shortcut.modifiers, privacy: .public), status=\(hotKeyStatus, privacy: .public)")
             if let eventHandler { RemoveEventHandler(eventHandler); self.eventHandler = nil }
+            registeredID = nil
             self.handler = nil
             return false
         }
+        Self.logger.info("Registered global shortcut keyCode=\(shortcut.keyCode, privacy: .public), modifiers=\(shortcut.modifiers, privacy: .public)")
         return true
     }
 
     func unregister() {
         if let hotKey { UnregisterEventHotKey(hotKey); self.hotKey = nil }
         if let eventHandler { RemoveEventHandler(eventHandler); self.eventHandler = nil }
+        registeredID = nil
         handler = nil
     }
 

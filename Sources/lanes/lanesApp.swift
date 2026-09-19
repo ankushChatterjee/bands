@@ -4,7 +4,7 @@ import AppKit
 extension PanelCommand {
     var key: KeyEquivalent {
         switch self {
-        case .quickCapture: "l"
+        case .quickCapture: "q"
         case .newThought, .newLane: "n"
         case .openSettings: ","
         case .copy: "c"

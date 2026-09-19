@@ -46,6 +46,7 @@ private enum LanesStatusMenu {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var controller: PanelController!
+    private var globalPanelShortcut: GlobalCaptureShortcutController!
     private var globalCaptureShortcut: GlobalCaptureShortcutController!
     private var container: ModelContainer!
     private var mcpBridge: LanesMCPBridge!
@@ -66,6 +67,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         notificationCoordinator.start()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
+            // Use AppKit's native, subtle selected-state background while the
+            // panel is open. The controller owns the highlighted state.
+            (button.cell as? NSButtonCell)?.highlightsBy = NSCell.StyleMask(rawValue: 8)
             button.image = LanesStatusIcon.make()
             button.toolTip = "lanes"
             button.target = self
@@ -73,10 +77,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             controller.attach(to: button)
         }
-        globalCaptureShortcut = GlobalCaptureShortcutController { [weak self] in
+        globalPanelShortcut = GlobalCaptureShortcutController(shortcut: .optionL) { [weak self] in
             self?.controller.show()
         }
-        _ = globalCaptureShortcut.register()
+        globalCaptureShortcut = GlobalCaptureShortcutController(shortcut: .optionQ) { [weak self] in
+            self?.controller.show()
+            DispatchQueue.main.async {
+                LanesCommandDispatcher.perform(.quickCapture)
+            }
+        }
+        let panelShortcutRegistered = globalPanelShortcut.register()
+        let captureShortcutRegistered = globalCaptureShortcut.register()
+        if !panelShortcutRegistered || !captureShortcutRegistered {
+            NSLog("lanes global shortcuts: Option-L registered=\(panelShortcutRegistered), Option-Q registered=\(captureShortcutRegistered)")
+        }
     }
 
     @objc private func statusItemClicked() {
@@ -94,6 +108,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         globalCaptureShortcut?.unregister()
+        globalPanelShortcut?.unregister()
         mcpBridge?.stop()
     }
 }

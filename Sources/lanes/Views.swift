@@ -209,6 +209,11 @@ struct RootView: View {
     @State private var hoveringLaneBin = false
     @State private var lanePendingDeletion: Lane?
     @State private var showingSettings = false
+    @State private var showingQuickCapture = false
+    @State private var quickCaptureText = ""
+    @State private var quickCaptureBusy = false
+    @State private var quickCaptureNeedsLane = false
+    @State private var quickCaptureMessage: String?
     @State private var thoughtPendingRelease: Thought?
     @State private var thoughtPendingMove: Thought?
     @FocusState private var focus: PanelFocus?
@@ -220,10 +225,10 @@ struct RootView: View {
     private let timestampRefreshTimer = Timer.publish(every: 5 * 60, on: .main, in: .common).autoconnect()
 
     enum PanelFocus: Hashable {
-        case newLane, newLaneDescription, lane(UUID), laneAdd(UUID), laneInput(UUID), laneRename(UUID), laneDescription(UUID), thought(UUID), thoughtEdit(UUID)
+        case newLane, newLaneDescription, quickCapture, lane(UUID), laneAdd(UUID), laneInput(UUID), laneRename(UUID), laneDescription(UUID), thought(UUID), thoughtEdit(UUID)
         var isEditing: Bool {
             switch self {
-            case .newLane, .newLaneDescription, .laneInput, .laneRename, .laneDescription, .thoughtEdit: true
+            case .newLane, .newLaneDescription, .quickCapture, .laneInput, .laneRename, .laneDescription, .thoughtEdit: true
             default: false
             }
         }
@@ -317,6 +322,7 @@ struct RootView: View {
                 updateCommands()
                 if !visible { restoreSelection() }
             }
+            .onChange(of: showingQuickCapture) { _, _ in updateCommands() }
             .onChange(of: thoughtPendingMove?.id) { _, id in
                 updateCommands()
                 if id == nil { restoreSelection() }
@@ -404,7 +410,18 @@ struct RootView: View {
 
     private var floatingActions: some View {
         HStack(spacing: 6) {
-            if addingLane && !enteringLaneDescription {
+            if showingQuickCapture {
+                QuickCaptureBubble(
+                    text: $quickCaptureText,
+                    isBusy: $quickCaptureBusy,
+                    needsLane: $quickCaptureNeedsLane,
+                    message: $quickCaptureMessage,
+                    lanes: lanes,
+                    onSubmit: submitQuickCapture,
+                    onChooseLane: chooseQuickCaptureLane,
+                    onCancel: cancelQuickCapture
+                )
+            } else if addingLane && !enteringLaneDescription {
                 TextField("", text: $newLane,
                           prompt: Text("New lane name…").foregroundStyle(LanesTheme.secondaryText(colorScheme)))
                     .textFieldStyle(.plain)
@@ -435,6 +452,19 @@ struct RootView: View {
                     .accessibilityLabel("Lane description")
                     .accessibilityHint("Enter a one-line description, then press Return to create the lane")
             } else if draggingLaneID == nil {
+                Button(action: beginQuickCapture) {
+                    Image(systemName: "bolt.fill")
+                        .font(.body.weight(.semibold))
+                        .frame(width: 30, height: 30)
+                        .background(LanesTheme.controlFill(colorScheme), in: Circle())
+                        .overlay(Circle().strokeBorder(LanesTheme.controlBorder(colorScheme)))
+                        .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.primary)
+                .pointingHandCursor()
+                .accessibilityLabel("Quick Capture")
+                .help("Quick Capture (⌥Q); open lanes (⌥L)")
                 Button { beginNewLane() } label: {
                     Text("+ lane")
                         .font(.subheadline.weight(.medium))
@@ -483,6 +513,15 @@ struct RootView: View {
         NSApp.activate(ignoringOtherApps: true)
         showingSettings = true
     }
+    private func beginQuickCapture() {
+        guard !modalIsPresented else { return }
+        quickCaptureText = ""
+        quickCaptureBusy = false
+        quickCaptureNeedsLane = false
+        quickCaptureMessage = nil
+        showingQuickCapture = true
+        DispatchQueue.main.async { focus = .quickCapture }
+    }
     private func beginNewLane() {
         newLane = ""
         newLaneDescription = ""
@@ -525,8 +564,79 @@ struct RootView: View {
         // The conditional editor must exist before FocusState can target it.
         DispatchQueue.main.async { focus = .laneInput(lane.id) }
     }
+    private func submitQuickCapture() {
+        let thought = quickCaptureText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !thought.isEmpty else {
+            quickCaptureMessage = "Enter a thought to capture."
+            return
+        }
+        guard !lanes.isEmpty else {
+            quickCaptureMessage = "Create a lane before capturing a thought."
+            return
+        }
+
+        quickCaptureBusy = true
+        quickCaptureNeedsLane = false
+        quickCaptureMessage = nil
+        Task { @MainActor in
+            do {
+                let result = try await JevClient().autoCategorize(thought: thought, lanes: lanes)
+                guard result.confidence >= JevClient.autoCategorizationConfidenceThreshold,
+                      let laneID = result.laneID,
+                      let lane = lanes.first(where: { $0.id == laneID }) else {
+                    quickCaptureBusy = false
+                    quickCaptureNeedsLane = true
+                    quickCaptureMessage = result.laneID == nil
+                        ? "Jev could not find a clear lane. Choose one below."
+                        : "Jev was only (Int((result.confidence * 100).rounded()))% confident. Choose a lane below."
+                    return
+                }
+                captureQuickThought(thought, in: lane)
+            } catch JevClientError.missingToken {
+                quickCaptureBusy = false
+                quickCaptureNeedsLane = true
+                quickCaptureMessage = "Add a Jev token in Settings, or choose a lane below."
+            } catch {
+                quickCaptureBusy = false
+                quickCaptureNeedsLane = true
+                quickCaptureMessage = "Jev could not categorize this thought. Choose a lane below."
+            }
+        }
+    }
+    private func chooseQuickCaptureLane(_ lane: Lane) {
+        let thought = quickCaptureText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !thought.isEmpty else { return }
+        captureQuickThought(thought, in: lane)
+    }
+    private func captureQuickThought(_ text: String, in lane: Lane) {
+        do {
+            guard let thought = try LaneManagement.capture(text, in: lane, context: context, now: .now) else {
+                quickCaptureBusy = false
+                quickCaptureMessage = "Enter a thought to capture."
+                return
+            }
+            try context.save()
+            LanesNotificationBus.thoughtChanged(thought.id)
+            selection.select(.thought(thought.id), with: .keyboard)
+            showingQuickCapture = false
+        } catch {
+            quickCaptureBusy = false
+            quickCaptureMessage = "The thought could not be saved. Try again."
+        }
+    }
+    private func cancelQuickCapture() {
+        showingQuickCapture = false
+        resetQuickCapture()
+        restoreSelection()
+    }
+    private func resetQuickCapture() {
+        quickCaptureText = ""
+        quickCaptureBusy = false
+        quickCaptureNeedsLane = false
+        quickCaptureMessage = nil
+    }
     private var modalIsPresented: Bool {
-        showingSettings || thoughtPendingMove != nil || thoughtPendingRelease != nil || lanePendingDeletion != nil
+        showingSettings || showingQuickCapture || thoughtPendingMove != nil || thoughtPendingRelease != nil || lanePendingDeletion != nil
     }
     private func updateCommands() {
         var available: Set<PanelCommand> = []
@@ -578,7 +688,7 @@ struct RootView: View {
         // Never steal cursor keys, text selection, or IME input from an editor.
         let textEditing = (NSApp.keyWindow?.firstResponder as? NSTextView)?.isEditable == true
         guard focus?.isEditing != true && !textEditing else { return }
-        if let command = PanelCommand.matching(event), command != .quickCapture {
+        if let command = PanelCommand.matching(event) {
             request.handled = true
             perform(command)
             return
@@ -614,8 +724,7 @@ struct RootView: View {
         guard BoardCommands.shared.available.contains(command) else { return }
         switch command {
         case .quickCapture:
-            selection.select(lanes.first.map { .lane($0.id) }, with: .keyboard)
-            focusQuickCapture()
+            beginQuickCapture()
         case .newThought: focusQuickCapture()
         case .newLane: beginNewLane()
         case .openSettings: openSettings()
@@ -796,6 +905,89 @@ struct LanesPanelBackground: View {
     }
 }
 
+private struct QuickCaptureBubble: View {
+    @Binding var text: String
+    @Binding var isBusy: Bool
+    @Binding var needsLane: Bool
+    @Binding var message: String?
+    let lanes: [Lane]
+    let onSubmit: () -> Void
+    let onChooseLane: (Lane) -> Void
+    let onCancel: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 6) {
+            ThoughtBubble(fill: LanesTheme.controlFill(colorScheme)) {
+                HStack(spacing: 6) {
+                    ZStack(alignment: .leading) {
+                        TextField("", text: $text, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .lineLimit(1...4)
+                            // ThoughtBubble adds 24 points of horizontal padding,
+                            // plus the return/spinner affordance and its gap.
+                            // Keep the editor inside the width reserved by the
+                            // floating action row, just like the add-lane field.
+                            .frame(width: 210, alignment: .leading)
+                            .focused($focused)
+                            .onSubmit { if !isBusy { onSubmit() } }
+                            .disabled(isBusy)
+                        if text.isEmpty {
+                            Text("Add thought")
+                                .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                                .allowsHitTesting(false)
+                        }
+                    }
+                    if isBusy {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Image(systemName: "return")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+            .frame(width: 252, alignment: .leading)
+
+            if message != nil || needsLane {
+                VStack(alignment: .leading, spacing: 6) {
+                    if let message {
+                        Text(message)
+                            .font(.caption)
+                            .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                    }
+                    if needsLane {
+                        FlowLayout(spacing: 7) {
+                            Text("Choose lane")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                            ForEach(lanes) { lane in
+                                Button(lane.name) { onChooseLane(lane) }
+                                    .buttonStyle(.plain)
+                                    .font(.caption)
+                                    .foregroundStyle(LanesTheme.laneText(colorScheme))
+                                    .padding(.horizontal, 9)
+                                    .padding(.vertical, 5)
+                                    .background(LanesTheme.laneFill(colorScheme), in: Capsule(style: .continuous))
+                                    .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
+                            }
+                        }
+                    }
+                }
+                .padding(8)
+                .background(LanesTheme.controlFill(colorScheme), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
+            }
+
+        }
+        .frame(width: 252, alignment: .trailing)
+        .onAppear { focused = true }
+        .onExitCommand { onCancel() }
+    }
+}
+
 struct SettingsView: View {
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
     @AppStorage(ThoughtNotificationSettings.enabledKey) private var notificationsEnabled = ThoughtNotificationSettings.defaultEnabled
@@ -809,6 +1001,8 @@ struct SettingsView: View {
     @State private var warm = ThoughtAgingSettings.defaults.warmMinutes
     @State private var attention = ThoughtAgingSettings.defaults.attentionMinutes
     @State private var old = ThoughtAgingSettings.defaults.oldMinutes
+    @State private var jevToken = ""
+    @State private var tokenMessage: String?
 
     private var draft: ThoughtAgingSettings { ThoughtAgingSettings(freshMinutes: fresh, warmMinutes: warm, attentionMinutes: attention, oldMinutes: old) }
     private var appVersion: String {
@@ -909,13 +1103,28 @@ struct SettingsView: View {
             }
             .padding(.vertical, 4)
             Divider()
+            SettingsSection(title: "Jev") {
+                Text("Store your Jev token securely for automatic thought categorization.")
+                    .font(.caption)
+                    .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                    .padding(.bottom, 4)
+                SecureField("Jev token", text: $jevToken)
+                    .textFieldStyle(.roundedBorder)
+                    .onSubmit { saveJevToken() }
+                if let tokenMessage {
+                    Text(tokenMessage)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Divider()
             SettingsSection(title: "Keyboard shortcuts") {
                 ShortcutRow(title: "Change lane", shortcut: "↑ / ↓")
                 ShortcutRow(title: "Navigate thoughts", shortcut: "← / →")
                 ShortcutRow(title: "Select lane name", shortcut: "← from first thought / +")
                 ShortcutRow(title: "Open selected +", shortcut: "Return")
                 ShortcutRow(title: "Cancel editor / close panel", shortcut: "Esc")
-                Text("Arrow navigation applies when browsing. Empty lanes use + as their content target. Return renames a selected lane name or opens a selected +. Text fields keep standard editing keys. New Thought uses the selected lane; Quick Capture uses the top lane.")
+                Text("Arrow navigation applies when browsing. Empty lanes use + as their content target. Return renames a selected lane name or opens a selected +. Text fields keep standard editing keys. New Thought uses the selected lane; Quick Capture asks Jev to choose a lane and lets you choose manually when needed.")
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(Array(PanelCommand.reference.enumerated()), id: \.element) { index, command in
                     ShortcutRow(title: command.title, shortcut: command.shortcut)
@@ -934,6 +1143,7 @@ struct SettingsView: View {
                 }
                 .pointingHandCursor()
                 Button("Apply") {
+                    guard saveJevToken() else { return }
                     agingStore.update(draft)
                     dismiss()
                 }
@@ -952,11 +1162,12 @@ struct SettingsView: View {
             .background(ThinScrollbarConfigurator())
         }
         .scrollIndicators(.visible)
-        .frame(width: 460, height: 458, alignment: .topLeading)
+        .frame(width: 460, height: 520, alignment: .topLeading)
         .background(LanesTheme.panel(colorScheme))
         .onAppear {
             initialAppearance = appearance
             setDraft(agingStore.settings)
+            loadJevToken()
             AppAppearance.apply(appearance)
         }
         .onChange(of: appearance) { _, value in AppAppearance.apply(value) }
@@ -965,6 +1176,30 @@ struct SettingsView: View {
     private func setDraft(_ settings: ThoughtAgingSettings) {
         fresh = settings.freshMinutes; warm = settings.warmMinutes
         attention = settings.attentionMinutes; old = settings.oldMinutes
+    }
+
+    private func loadJevToken() {
+        do {
+            jevToken = try SecureTokenStore.shared.token(forKey: SecureTokenKeys.jev) ?? ""
+        } catch {
+            tokenMessage = "Unable to read the stored token."
+        }
+    }
+
+    @discardableResult
+    private func saveJevToken() -> Bool {
+        do {
+            if jevToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                try SecureTokenStore.shared.deleteToken(forKey: SecureTokenKeys.jev)
+            } else {
+                try SecureTokenStore.shared.setToken(jevToken, forKey: SecureTokenKeys.jev)
+            }
+            tokenMessage = "Token stored securely."
+            return true
+        } catch {
+            tokenMessage = "Unable to store the token securely."
+            return false
+        }
     }
 }
 
@@ -1383,10 +1618,12 @@ private struct LaneDragPreview: View {
 private struct ThoughtBubble<Content: View>: View {
     @Environment(\.colorScheme) private var colorScheme
     let age: ThoughtAge
+    let fill: Color?
     let content: Content
 
-    init(age: ThoughtAge = .fresh, @ViewBuilder content: () -> Content) {
+    init(age: ThoughtAge = .fresh, fill: Color? = nil, @ViewBuilder content: () -> Content) {
         self.age = age
+        self.fill = fill
         self.content = content()
     }
 
@@ -1395,7 +1632,7 @@ private struct ThoughtBubble<Content: View>: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(LanesTheme.chipFill(for: age, scheme: colorScheme), in: Capsule(style: .continuous))
+            .background(fill ?? LanesTheme.chipFill(for: age, scheme: colorScheme), in: Capsule(style: .continuous))
             .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.chipBorder(for: age, scheme: colorScheme), lineWidth: age == .fresh ? 0.7 : 0.9))
     }
 }

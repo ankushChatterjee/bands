@@ -42,6 +42,14 @@ Suggested arguments are documented by the MCP `tools/list` response. The
 helper itself never writes to the app store and never emits diagnostics on
 stdout, preserving the MCP transport.
 
+## Secure tokens
+
+User-supplied service tokens should be stored with the app's
+`SecureTokenStore`, using namespaced keys such as `lanes:jev_key`. It uses
+macOS Keychain generic-password items with `WhenUnlockedThisDeviceOnly`
+accessibility and no biometric/password access-control policy. The user enters
+each token once; reads are silent while the Mac is unlocked.
+
 Lane objects returned by `list_lanes` and `list_thoughts` include `id`, `name`,
 `description`, `order`, and `createdAt`. `description` is `null` for lanes
 created before lane descriptions were added or for lanes without a description.

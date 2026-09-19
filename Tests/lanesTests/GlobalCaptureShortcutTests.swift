@@ -4,16 +4,35 @@ import Carbon.HIToolbox
 
 @MainActor
 final class GlobalCaptureShortcutTests: XCTestCase {
-    func testOptionLIsTheConfiguredShortcut() {
+    func testOptionQIsTheConfiguredShortcut() {
+        XCTAssertEqual(GlobalShortcutEvent.optionQ.keyCode, UInt32(kVK_ANSI_Q))
+        XCTAssertEqual(GlobalShortcutEvent.optionQ.modifiers, optionKeyValue)
+    }
+
+    func testOptionLIsThePanelShortcut() {
         XCTAssertEqual(GlobalShortcutEvent.optionL.keyCode, UInt32(kVK_ANSI_L))
         XCTAssertEqual(GlobalShortcutEvent.optionL.modifiers, optionKeyValue)
     }
 
-    func testParserAcceptsOptionLAndRejectsOtherModifierCombinations() {
+    func testCarbonRoutingConsumesOnlyTheMatchingShortcutEvent() {
+        XCTAssertTrue(CarbonGlobalShortcutRouting.shouldHandle(
+            signature: CarbonGlobalShortcutRouting.signature,
+            id: GlobalShortcutEvent.optionL.keyCode,
+            registeredID: GlobalShortcutEvent.optionL.keyCode
+        ))
+        XCTAssertFalse(CarbonGlobalShortcutRouting.shouldHandle(
+            signature: CarbonGlobalShortcutRouting.signature,
+            id: GlobalShortcutEvent.optionL.keyCode,
+            registeredID: GlobalShortcutEvent.optionQ.keyCode
+        ))
+    }
+
+    func testParserAcceptsOptionLAndOptionQAndRejectsOtherModifierCombinations() {
         XCTAssertEqual(GlobalShortcutParser.parse(keyCode: UInt16(kVK_ANSI_L), modifierFlags: [.option]), .optionL)
-        XCTAssertNil(GlobalShortcutParser.parse(keyCode: UInt16(kVK_ANSI_L), modifierFlags: [.option, .command]))
+        XCTAssertEqual(GlobalShortcutParser.parse(keyCode: UInt16(kVK_ANSI_Q), modifierFlags: [.option]), .optionQ)
+        XCTAssertNil(GlobalShortcutParser.parse(keyCode: UInt16(kVK_ANSI_Q), modifierFlags: [.option, .command]))
         XCTAssertNil(GlobalShortcutParser.parse(keyCode: 36, modifierFlags: [.option]))
-        XCTAssertNil(GlobalShortcutParser.parse(keyCode: UInt16(kVK_ANSI_L), modifierFlags: []))
+        XCTAssertNil(GlobalShortcutParser.parse(keyCode: UInt16(kVK_ANSI_Q), modifierFlags: []))
     }
 
     func testRegistrationIsIdempotentAndRoutesMatchingEvent() {
@@ -24,7 +43,7 @@ final class GlobalCaptureShortcutTests: XCTestCase {
         XCTAssertTrue(controller.register())
         XCTAssertTrue(controller.register())
         XCTAssertEqual(registrar.registerCount, 1)
-        controller.route(.optionL)
+        controller.route(.optionQ)
         XCTAssertEqual(actionCount, 1)
     }
 
@@ -34,8 +53,8 @@ final class GlobalCaptureShortcutTests: XCTestCase {
         let controller = GlobalCaptureShortcutController(registrar: registrar) { actionCount += 1 }
         XCTAssertTrue(controller.register())
 
-        controller.route(GlobalShortcutEvent(keyCode: 36, modifiers: GlobalShortcutEvent.optionL.modifiers))
-        controller.route(GlobalShortcutEvent(keyCode: GlobalShortcutEvent.optionL.keyCode, modifiers: 0))
+        controller.route(GlobalShortcutEvent(keyCode: 36, modifiers: GlobalShortcutEvent.optionQ.modifiers))
+        controller.route(GlobalShortcutEvent(keyCode: GlobalShortcutEvent.optionQ.keyCode, modifiers: 0))
         XCTAssertEqual(actionCount, 0)
     }
 
@@ -56,7 +75,7 @@ final class GlobalCaptureShortcutTests: XCTestCase {
         XCTAssertTrue(controller.register())
         controller.unregister()
         controller.unregister()
-        controller.route(.optionL)
+        controller.route(.optionQ)
 
         XCTAssertEqual(actionCount, 0)
         XCTAssertEqual(controller.state, .idle)

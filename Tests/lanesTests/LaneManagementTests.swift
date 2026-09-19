@@ -54,6 +54,14 @@ final class LaneManagementTests: XCTestCase {
         XCTAssertEqual(lanes.first?["description"] as? String, "Projects and coding")
     }
 
+    func testJevCriteriaUsesLaneNamesAndDescriptionsWithNoMatchOption() {
+        let lane = Lane(name: "Work", descriptionText: "Projects and coding", order: 0)
+        let criteria = JevClient.criteria(for: [lane])
+
+        XCTAssertEqual(criteria[lane.id.uuidString], "Work: Projects and coding")
+        XCTAssertEqual(criteria[JevClient.noMatchOption], "The thought does not clearly belong in any listed lane; leave it unassigned.")
+    }
+
     func testTopAndInlineCapturePersistToTheRequestedLane() throws {
         let context = try makeContext()
         let lanes = [
