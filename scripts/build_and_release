@@ -76,6 +76,9 @@ xcodebuild \
 
 [ -d "$app_path" ] || { printf '%s\n' 'Archive did not contain lanes.app.' >&2; exit 1; }
 
+swift build -c release --product lanes-mcp
+cp "$root_dir/.build/release/lanes-mcp" "$app_path/Contents/MacOS/lanes-mcp"
+
 printf 'Self-signing lanes.app with %s...\n' "$signing_identity"
 codesign --force --deep --options runtime --timestamp=none --sign "$signing_identity" "$app_path"
 codesign --verify --deep --strict --verbose=2 "$app_path"
