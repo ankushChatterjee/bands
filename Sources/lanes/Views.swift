@@ -1723,6 +1723,10 @@ struct ThoughtChip: View {
     }
     private var displayChip: some View {
         thoughtBubble
+            // Reserve the checkmark's overhanging area in the hover region.
+            // Without this, moving from the bubble onto the offset button can
+            // clear `hovering` and remove the button before the click lands.
+            .padding(.trailing, 8)
             .overlay(alignment: .trailing) { if hovering { completionButton } }
             .overlay { keyboardFocusOverlay }
             .overlay(alignment: .bottomLeading) { if hovering && isThoughtTruncated { fullTextOverlay } }
@@ -1738,7 +1742,7 @@ struct ThoughtChip: View {
         ThoughtBubble(age: age) { HStack(spacing: 6) { Text(thought.text).lineLimit(1).truncationMode(.tail).frame(maxWidth: 292, alignment: .leading); Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(LanesTheme.secondaryText(colorScheme)) } }
     }
     private var completionButton: some View {
-        Button(action: complete) { Image(systemName: "checkmark").font(.caption.weight(.bold)) }.buttonStyle(.plain).foregroundStyle(.primary).frame(width: 18, height: 18).background(.regularMaterial, in: Circle()).overlay(Circle().strokeBorder(.primary.opacity(0.12))).offset(x: 8).pointingHandCursor().accessibilityLabel("Complete thought")
+        Button(action: complete) { Image(systemName: "checkmark").font(.caption.weight(.bold)) }.buttonStyle(.plain).foregroundStyle(.primary).frame(width: 18, height: 18).background(.regularMaterial, in: Circle()).overlay(Circle().strokeBorder(.primary.opacity(0.12))).pointingHandCursor().accessibilityLabel("Complete thought")
     }
     @ViewBuilder private var keyboardFocusOverlay: some View {
         if focus == .thought(thought.id) && selection.target == .thought(thought.id) && selection.showsKeyboardFocus {
