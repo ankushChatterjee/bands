@@ -581,14 +581,12 @@ struct RootView: View {
         Task { @MainActor in
             do {
                 let result = try await JevClient().autoCategorize(thought: thought, lanes: lanes)
-                guard result.confidence >= JevClient.autoCategorizationConfidenceThreshold,
+                guard result.confidence >= JevSettings.confidenceThreshold,
                       let laneID = result.laneID,
                       let lane = lanes.first(where: { $0.id == laneID }) else {
                     quickCaptureBusy = false
                     quickCaptureNeedsLane = true
-                    quickCaptureMessage = result.laneID == nil
-                        ? "Jev could not find a clear lane. Choose one below."
-                        : "Jev was only (Int((result.confidence * 100).rounded()))% confident. Choose a lane below."
+                    quickCaptureMessage = "Jev was only \(Int((result.confidence * 100).rounded()))% confident. Choose a lane below."
                     return
                 }
                 captureQuickThought(thought, in: lane)
@@ -1001,6 +999,7 @@ struct SettingsView: View {
     @State private var warm = ThoughtAgingSettings.defaults.warmMinutes
     @State private var attention = ThoughtAgingSettings.defaults.attentionMinutes
     @State private var old = ThoughtAgingSettings.defaults.oldMinutes
+    @State private var jevConfidencePercent = Int((JevSettings.defaultConfidenceThreshold * 100).rounded())
     @State private var jevToken = ""
     @State private var tokenMessage: String?
 
@@ -1104,10 +1103,21 @@ struct SettingsView: View {
             .padding(.vertical, 4)
             Divider()
             SettingsSection(title: "Jev") {
-                Text("Store your Jev token securely for automatic thought categorization.")
+                Text("Configure automatic thought categorization with Jev.")
                     .font(.caption)
                     .foregroundStyle(LanesTheme.secondaryText(colorScheme))
                     .padding(.bottom, 4)
+                HStack {
+                    Text("Minimum confidence")
+                    Spacer()
+                    Stepper("\(jevConfidencePercent)%", value: $jevConfidencePercent, in: 0...100)
+                        .labelsHidden()
+                    Text("\(jevConfidencePercent)%")
+                        .monospacedDigit()
+                        .frame(width: 42, alignment: .trailing)
+                }
+                .padding(.vertical, 4)
+                Divider()
                 SecureField("Jev token", text: $jevToken)
                     .textFieldStyle(.roundedBorder)
                     .onSubmit { saveJevToken() }
@@ -1133,7 +1143,10 @@ struct SettingsView: View {
             }
             Divider()
             HStack {
-                Button("Restore Defaults") { setDraft(.defaults) }
+                Button("Restore Defaults") {
+                    setDraft(.defaults)
+                    jevConfidencePercent = Int((JevSettings.defaultConfidenceThreshold * 100).rounded())
+                }
                     .pointingHandCursor()
                 Spacer()
                 Button("Cancel", role: .cancel) {
@@ -1145,6 +1158,7 @@ struct SettingsView: View {
                 Button("Apply") {
                     guard saveJevToken() else { return }
                     agingStore.update(draft)
+                    UserDefaults.standard.set(Double(jevConfidencePercent) / 100, forKey: JevSettings.confidenceThresholdKey)
                     dismiss()
                 }
                     .disabled(validationMessage != nil)
@@ -1167,6 +1181,7 @@ struct SettingsView: View {
         .onAppear {
             initialAppearance = appearance
             setDraft(agingStore.settings)
+            jevConfidencePercent = Int((JevSettings.confidenceThreshold * 100).rounded())
             loadJevToken()
             AppAppearance.apply(appearance)
         }
