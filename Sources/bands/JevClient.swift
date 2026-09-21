@@ -13,7 +13,7 @@ enum JevSettings {
 }
 
 struct JevCategorization: Equatable, Sendable {
-    let laneID: UUID?
+    let bandID: UUID?
     let confidence: Double
     let probabilities: [String: Double]
     let model: String
@@ -22,7 +22,7 @@ struct JevCategorization: Equatable, Sendable {
 enum JevClientError: Error, Equatable {
     case missingToken
     case emptyThought
-    case noLanes
+    case noBands
     case invalidResponse
     case unexpectedHTTPStatus(Int)
 }
@@ -58,7 +58,7 @@ private struct JevResponse: Decodable {
 final class JevClient: @unchecked Sendable {
     static let endpoint = URL(string: "https://api.typesafe.ai/v1/systemone")!
     static let model = "jev-latest"
-    static let laneQuestionID = "lane"
+    static let bandQuestionID = "band"
     private let tokenStore: SecureTokenStore
     private let session: URLSession
 
@@ -68,21 +68,21 @@ final class JevClient: @unchecked Sendable {
     }
 
     @MainActor
-    func autoCategorize(thought: String, lanes: [Lane]) async throws -> JevCategorization {
+    func autoCategorize(thought: String, bands: [Band]) async throws -> JevCategorization {
         let trimmedThought = thought.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedThought.isEmpty else { throw JevClientError.emptyThought }
-        guard !lanes.isEmpty else { throw JevClientError.noLanes }
+        guard !bands.isEmpty else { throw JevClientError.noBands }
         guard let token = try tokenStore.token(forKey: SecureTokenKeys.jev), !token.isEmpty else {
             throw JevClientError.missingToken
         }
 
-        let criteria = Self.criteria(for: lanes)
+        let criteria = Self.criteria(for: bands)
         let requestBody = JevRequest(
             state: trimmedThought,
             model: Self.model,
             questions: [
-                Self.laneQuestionID: JevChoiceQuestion(
-                    instructions: "Which listed lane best fits this thought? Choose the best available lane.",
+                Self.bandQuestionID: JevChoiceQuestion(
+                    instructions: "Which listed band best fits this thought? Choose the best available band.",
                     criteria: criteria
                 )
             ]
@@ -103,28 +103,28 @@ final class JevClient: @unchecked Sendable {
         }
 
         let decoded = try JSONDecoder().decode(JevResponse.self, from: data)
-        guard let answer = decoded.answers[Self.laneQuestionID], answer.type == "choice" else {
+        guard let answer = decoded.answers[Self.bandQuestionID], answer.type == "choice" else {
             throw JevClientError.invalidResponse
         }
 
-        let laneIDs = Set(lanes.map { $0.id.uuidString })
-        guard let laneID = UUID(uuidString: answer.choice), laneIDs.contains(laneID.uuidString) else {
+        let bandIDs = Set(bands.map { $0.id.uuidString })
+        guard let bandID = UUID(uuidString: answer.choice), bandIDs.contains(bandID.uuidString) else {
             throw JevClientError.invalidResponse
         }
 
         return JevCategorization(
-            laneID: laneID,
+            bandID: bandID,
             confidence: answer.confidence,
             probabilities: answer.probabilities,
             model: decoded.model
         )
     }
 
-    static func criteria(for lanes: [Lane]) -> [String: String] {
-        let criteria = Dictionary(uniqueKeysWithValues: lanes.map { lane in
-            let description = lane.descriptionText?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let purpose = description?.isEmpty == false ? description! : "No description provided. Use the lane name as the guide."
-            return (lane.id.uuidString, "\(lane.name): \(purpose)")
+    static func criteria(for bands: [Band]) -> [String: String] {
+        let criteria = Dictionary(uniqueKeysWithValues: bands.map { band in
+            let description = band.descriptionText?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let purpose = description?.isEmpty == false ? description! : "No description provided. Use the band name as the guide."
+            return (band.id.uuidString, "\(band.name): \(purpose)")
         })
         return criteria
     }

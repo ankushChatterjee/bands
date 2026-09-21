@@ -43,24 +43,24 @@ extension ThoughtAge: CaseIterable {
 }
 
 extension Notification.Name {
-    static let lanesThoughtChanged = Notification.Name("lanes.thoughtChanged")
-    static let lanesThoughtsChanged = Notification.Name("lanes.thoughtsChanged")
-    static let lanesAgingSettingsChanged = Notification.Name("lanes.agingSettingsChanged")
-    static let lanesNotificationPreferenceChanged = Notification.Name("lanes.notificationPreferenceChanged")
+    static let bandsThoughtChanged = Notification.Name("bands.thoughtChanged")
+    static let bandsThoughtsChanged = Notification.Name("bands.thoughtsChanged")
+    static let bandsAgingSettingsChanged = Notification.Name("bands.agingSettingsChanged")
+    static let bandsNotificationPreferenceChanged = Notification.Name("bands.notificationPreferenceChanged")
 }
 
-enum LanesNotificationBus {
+enum BandsNotificationBus {
     static func thoughtChanged(_ id: UUID) {
-        NotificationCenter.default.post(name: .lanesThoughtChanged, object: nil, userInfo: ["thoughtID": id])
+        NotificationCenter.default.post(name: .bandsThoughtChanged, object: nil, userInfo: ["thoughtID": id])
     }
 
     static func allThoughtsChanged() {
-        NotificationCenter.default.post(name: .lanesThoughtsChanged, object: nil)
+        NotificationCenter.default.post(name: .bandsThoughtsChanged, object: nil)
     }
 }
 
 @MainActor
-final class LanesNotificationCoordinator {
+final class BandsNotificationCoordinator {
     private let container: ModelContainer
     private let center = UNUserNotificationCenter.current()
     private var work: Task<Void, Never>?
@@ -71,13 +71,13 @@ final class LanesNotificationCoordinator {
         self.container = container
         UserDefaults.standard.register(defaults: [ThoughtNotificationSettings.enabledKey: ThoughtNotificationSettings.defaultEnabled])
         let nc = NotificationCenter.default
-        observers.append(nc.addObserver(forName: .lanesThoughtChanged, object: nil, queue: .main) { [weak self] note in
+        observers.append(nc.addObserver(forName: .bandsThoughtChanged, object: nil, queue: .main) { [weak self] note in
             guard let id = note.userInfo?["thoughtID"] as? UUID else { return }
             Task { @MainActor in self?.refresh(thoughtID: id) }
         })
-        observers.append(nc.addObserver(forName: .lanesThoughtsChanged, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.rebuild() } })
-        observers.append(nc.addObserver(forName: .lanesAgingSettingsChanged, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.rebuild() } })
-        observers.append(nc.addObserver(forName: .lanesNotificationPreferenceChanged, object: nil, queue: .main) { [weak self] note in
+        observers.append(nc.addObserver(forName: .bandsThoughtsChanged, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.rebuild() } })
+        observers.append(nc.addObserver(forName: .bandsAgingSettingsChanged, object: nil, queue: .main) { [weak self] _ in Task { @MainActor in self?.rebuild() } })
+        observers.append(nc.addObserver(forName: .bandsNotificationPreferenceChanged, object: nil, queue: .main) { [weak self] note in
             let enabled = note.userInfo?["enabled"] as? Bool ?? false
             Task { @MainActor in self?.preferenceChanged(enabled: enabled) }
         })

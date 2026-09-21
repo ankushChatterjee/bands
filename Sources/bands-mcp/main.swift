@@ -11,8 +11,8 @@ import Glibc
 final class UnixSocketProxy {
     private let path: String
 
-    init(path: String = ProcessInfo.processInfo.environment["LANES_MCP_SOCKET"] ??
-         "\(NSHomeDirectory())/Library/Application Support/lanes/mcp.sock") {
+    init(path: String = ProcessInfo.processInfo.environment["BANDS_MCP_SOCKET"] ??
+         "\(NSHomeDirectory())/Library/Application Support/bands/mcp.sock") {
         self.path = path
     }
 
@@ -73,16 +73,16 @@ enum ProxyError: Error {
 struct MCPServer {
     let proxy: UnixSocketProxy
     let tools: [[String: Any]] = [
-        ["name": "list_lanes", "description": "List lanes in Lanes.", "inputSchema": ["type": "object", "properties": [:]]],
-        ["name": "list_thoughts", "description": "List thoughts, optionally filtered by lane or state.", "inputSchema": ["type": "object", "properties": ["laneId": ["type": "string"], "includeCompleted": ["type": "boolean"], "includeReleased": ["type": "boolean"]]]],
+        ["name": "list_bands", "description": "List bands in Bands.", "inputSchema": ["type": "object", "properties": [:]]],
+        ["name": "list_thoughts", "description": "List thoughts, optionally filtered by band or state.", "inputSchema": ["type": "object", "properties": ["bandId": ["type": "string"], "includeCompleted": ["type": "boolean"], "includeReleased": ["type": "boolean"]]]],
         ["name": "list_prioritized_thoughts", "description": "List active thoughts sorted by age-derived priority: fresh is low, warm is medium, attention is high, and old is urgent.", "inputSchema": ["type": "object", "properties": ["minimumPriority": ["type": "string", "enum": ["low", "medium", "high", "urgent"]]]]],
         ["name": "search", "description": "Search thoughts by text.", "inputSchema": ["type": "object", "properties": ["query": ["type": "string"]], "required": ["query"]]],
         ["name": "get", "description": "Get one thought by ID.", "inputSchema": ["type": "object", "properties": ["thoughtId": ["type": "string"]], "required": ["thoughtId"]]],
-        ["name": "capture", "description": "Capture a new thought into Lanes.", "inputSchema": ["type": "object", "properties": ["text": ["type": "string"], "laneId": ["type": "string"]], "required": ["text"]]],
+        ["name": "capture", "description": "Capture a new thought into Bands.", "inputSchema": ["type": "object", "properties": ["text": ["type": "string"], "bandId": ["type": "string"]], "required": ["text"]]],
         ["name": "update_thought", "description": "Edit an existing thought.", "inputSchema": ["type": "object", "properties": ["thoughtId": ["type": "string"], "text": ["type": "string"]], "required": ["thoughtId", "text"]]],
         ["name": "complete_thought", "description": "Mark a thought complete.", "inputSchema": ["type": "object", "properties": ["thoughtId": ["type": "string"]], "required": ["thoughtId"]]],
         ["name": "release_thought", "description": "Let a thought go.", "inputSchema": ["type": "object", "properties": ["thoughtId": ["type": "string"]], "required": ["thoughtId"]]],
-        ["name": "move_thought", "description": "Move a thought to another lane.", "inputSchema": ["type": "object", "properties": ["thoughtId": ["type": "string"], "laneId": ["type": "string"]], "required": ["thoughtId", "laneId"]]]
+        ["name": "move_thought", "description": "Move a thought to another band.", "inputSchema": ["type": "object", "properties": ["thoughtId": ["type": "string"], "bandId": ["type": "string"]], "required": ["thoughtId", "bandId"]]]
     ]
 
     func handle(_ request: [String: Any]) -> [String: Any]? {
@@ -96,8 +96,8 @@ struct MCPServer {
             return result(id, [
                 "protocolVersion": protocolVersion,
                 "capabilities": ["tools": [:]],
-                "serverInfo": ["name": "lanes", "version": "0.1.1"],
-                "instructions": "Lanes stores local thoughts. Use list_lanes or list_thoughts before modifying a thought, and ask before creating, editing, moving, completing, or releasing one."
+                "serverInfo": ["name": "bands", "version": "0.1.1"],
+                "instructions": "Bands stores local thoughts. Use list_bands or list_thoughts before modifying a thought, and ask before creating, editing, moving, completing, or releasing one."
             ])
         }
         if method == "ping" { return result(id, [:]) }
@@ -109,14 +109,14 @@ struct MCPServer {
             }
             let arguments = params["arguments"] as? [String: Any] ?? [:]
             do {
-                let backend = try proxy.request(["jsonrpc": "2.0", "id": id ?? NSNull(), "method": "lanes.command", "params": ["name": name, "arguments": arguments]])
+                let backend = try proxy.request(["jsonrpc": "2.0", "id": id ?? NSNull(), "method": "bands.command", "params": ["name": name, "arguments": arguments]])
                 if let backendError = backend["error"] { return ["jsonrpc": "2.0", "id": id ?? NSNull(), "error": backendError] }
                 guard let backendResult = backend["result"] else {
-                    return error(id, -32002, "Lanes returned an invalid MCP response")
+                    return error(id, -32002, "Bands returned an invalid MCP response")
                 }
                 return result(id, backendResult)
             } catch _ {
-                return error(id, -32001, "Lanes app is unavailable at the local MCP socket")
+                return error(id, -32001, "Bands app is unavailable at the local MCP socket")
             }
         }
         return error(id, -32601, "Method not found")

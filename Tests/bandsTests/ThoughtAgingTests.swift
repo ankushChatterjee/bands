@@ -1,5 +1,5 @@
 import XCTest
-@testable import lanes
+@testable import bands
 
 @MainActor
 final class ThoughtAgingTests: XCTestCase {
@@ -19,7 +19,7 @@ final class ThoughtAgingTests: XCTestCase {
     }
 
     func testSettingsPersistAndRoundTrip() {
-        let suiteName = "lanes.tests.\(UUID().uuidString)"
+        let suiteName = "bands.tests.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let store = ThoughtAgingSettingsStore(defaults: defaults)
@@ -104,8 +104,8 @@ final class ThoughtAgingTests: XCTestCase {
     }
 
     func testThoughtStateTransitionsUpdatePersistedFieldsDeterministically() {
-        let source = Lane(name: "Source", order: 0); let target = Lane(name: "Target", order: 1)
-        let created = Date(timeIntervalSince1970: 10); let thought = Thought(text: "Old", lane: source, createdAt: created)
+        let source = Band(name: "Source", order: 0); let target = Band(name: "Target", order: 1)
+        let created = Date(timeIntervalSince1970: 10); let thought = Thought(text: "Old", band: source, createdAt: created)
         XCTAssertTrue(ThoughtManagement.edit(thought, rawText: " New ", now: Date(timeIntervalSince1970: 20)))
         XCTAssertTrue(ThoughtManagement.move(thought, to: target, now: Date(timeIntervalSince1970: 30)))
         ThoughtManagement.complete(thought, now: Date(timeIntervalSince1970: 40))

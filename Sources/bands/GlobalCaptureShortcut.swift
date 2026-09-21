@@ -88,7 +88,7 @@ final class GlobalCaptureShortcutController {
 
 private final class CarbonGlobalShortcutRegistrar: GlobalShortcutRegistering {
     private static let signature = CarbonGlobalShortcutRouting.signature
-    private static let logger = Logger(subsystem: "com.example.lanes", category: "global-shortcuts")
+    private static let logger = Logger(subsystem: "com.example.bands", category: "global-shortcuts")
     private var hotKey: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
     private var handler: (() -> Void)?

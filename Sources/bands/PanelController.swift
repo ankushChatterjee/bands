@@ -10,11 +10,11 @@ final class PanelKeyRequest {
 }
 
 extension Notification.Name {
-    static let lanesKeyRequest = Notification.Name("lanes.keyRequest")
-    static let lanesPointerInput = Notification.Name("lanes.pointerInput")
+    static let bandsKeyRequest = Notification.Name("bands.keyRequest")
+    static let bandsPointerInput = Notification.Name("bands.pointerInput")
 }
 
-final class LanesPanel: NSPanel {
+final class BandsPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { false }
 
@@ -24,7 +24,7 @@ final class LanesPanel: NSPanel {
         // opportunity to handle its registered shortcut before AppKit's menu.
         if event.type == .keyDown, PanelCommand.matching(event) != nil {
             let request = PanelKeyRequest(event)
-            NotificationCenter.default.post(name: .lanesKeyRequest, object: request)
+            NotificationCenter.default.post(name: .bandsKeyRequest, object: request)
             if request.handled { return true }
         }
         return super.performKeyEquivalent(with: event)
@@ -74,10 +74,10 @@ final class PanelController: NSObject, NSWindowDelegate {
             if event.window === panel, panel.isKeyWindow, panel.attachedSheet == nil, NSApp.modalWindow == nil {
                 if event.type == .keyDown {
                     let request = PanelKeyRequest(event)
-                    NotificationCenter.default.post(name: .lanesKeyRequest, object: request)
+                    NotificationCenter.default.post(name: .bandsKeyRequest, object: request)
                     if request.handled { return nil }
                 } else {
-                    NotificationCenter.default.post(name: .lanesPointerInput, object: nil)
+                    NotificationCenter.default.post(name: .bandsPointerInput, object: nil)
                 }
             }
             if event.type == .keyDown, event.keyCode == 53 {
@@ -135,7 +135,7 @@ final class PanelController: NSObject, NSWindowDelegate {
             guard let self, let panel else { return }
             self.configureScrollViews(in: panel.contentView)
         }
-        NotificationCenter.default.post(name: .lanesPanelDidOpen, object: nil)
+        NotificationCenter.default.post(name: .bandsPanelDidOpen, object: nil)
     }
 
     private func position(_ panel: NSPanel) {
@@ -155,7 +155,7 @@ final class PanelController: NSObject, NSWindowDelegate {
     private func makePanel() -> NSPanel {
         let root = RootView().environmentObject(ThoughtAgingSettingsStore.shared).modelContainer(modelContainer)
         let hosting = NSHostingView(rootView: root)
-        let panel = LanesPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 330),
+        let panel = BandsPanel(contentRect: NSRect(x: 0, y: 0, width: 720, height: 330),
                                styleMask: [.borderless, .fullSizeContentView],
                                backing: .buffered, defer: false)
         panel.contentView = hosting
@@ -166,7 +166,7 @@ final class PanelController: NSObject, NSWindowDelegate {
         panel.titlebarAppearsTransparent = true
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        // Dragging inside the panel belongs to SwiftUI's thought/lane interactions;
+        // Dragging inside the panel belongs to SwiftUI's thought/band interactions;
         // the panel must not interpret those gestures as window movement.
         panel.isMovableByWindowBackground = false
         panel.hidesOnDeactivate = true

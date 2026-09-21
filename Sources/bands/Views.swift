@@ -31,7 +31,7 @@ private enum ThoughtClipboard {
 
 /// The neutral system is the visual default. Colour is deliberately reserved for
 /// status: a thought only becomes colourful when its age needs attention.
-enum LanesTheme {
+enum BandsTheme {
     static let softGray = Color(red: 0.898, green: 0.898, blue: 0.918) // #E5E5EA
     static let graphite = Color(red: 0.11, green: 0.11, blue: 0.12)
 
@@ -43,11 +43,11 @@ enum LanesTheme {
         scheme == .dark ? .white.opacity(0.14) : .black.opacity(0.12)
     }
 
-    static func laneFill(_ scheme: ColorScheme) -> Color {
+    static func bandFill(_ scheme: ColorScheme) -> Color {
         scheme == .light ? graphite : softGray
     }
 
-    static func laneText(_ scheme: ColorScheme) -> Color {
+    static func bandText(_ scheme: ColorScheme) -> Color {
         scheme == .light ? .white : graphite
     }
 
@@ -144,7 +144,7 @@ private struct ThoughtFramePreferenceKey: PreferenceKey {
     }
 }
 
-private struct LaneDropDelegate: DropDelegate {
+private struct BandDropDelegate: DropDelegate {
     let updateLocation: (CGPoint) -> Void
     let performDrop: (NSItemProvider, CGPoint) -> Void
     @Binding var isTargeted: Bool
@@ -186,7 +186,7 @@ private struct ThoughtInsertionIndicator: View {
     }
 }
 
-private struct LaneInsertionIndicator: View {
+private struct BandInsertionIndicator: View {
     var body: some View {
         Capsule(style: .continuous)
             .fill(.primary.opacity(0.22))
@@ -198,21 +198,21 @@ private struct LaneInsertionIndicator: View {
 
 struct RootView: View {
     @Environment(\.modelContext) private var context
-    @Query(sort: \Lane.order) private var lanes: [Lane]
-    @State private var newLane = ""
-    @State private var newLaneDescription = ""
-    @State private var addingLane = false
-    @State private var enteringLaneDescription = false
-    @State private var composingLaneID: UUID?
+    @Query(sort: \Band.order) private var bands: [Band]
+    @State private var newBand = ""
+    @State private var newBandDescription = ""
+    @State private var addingBand = false
+    @State private var enteringBandDescription = false
+    @State private var composingBandID: UUID?
     @State private var selection = PanelSelection()
-    @State private var draggingLaneID: UUID?
-    @State private var hoveringLaneBin = false
-    @State private var lanePendingDeletion: Lane?
+    @State private var draggingBandID: UUID?
+    @State private var hoveringBandBin = false
+    @State private var bandPendingDeletion: Band?
     @State private var showingSettings = false
     @State private var showingQuickCapture = false
     @State private var quickCaptureText = ""
     @State private var quickCaptureBusy = false
-    @State private var quickCaptureNeedsLane = false
+    @State private var quickCaptureNeedsBand = false
     @State private var quickCaptureMessage: String?
     @State private var thoughtPendingRelease: Thought?
     @State private var thoughtPendingMove: Thought?
@@ -225,10 +225,10 @@ struct RootView: View {
     private let timestampRefreshTimer = Timer.publish(every: 5 * 60, on: .main, in: .common).autoconnect()
 
     enum PanelFocus: Hashable {
-        case newLane, newLaneDescription, quickCapture, lane(UUID), laneAdd(UUID), laneInput(UUID), laneRename(UUID), laneDescription(UUID), thought(UUID), thoughtEdit(UUID)
+        case newBand, newBandDescription, quickCapture, band(UUID), bandAdd(UUID), bandInput(UUID), bandRename(UUID), bandDescription(UUID), thought(UUID), thoughtEdit(UUID)
         var isEditing: Bool {
             switch self {
-            case .newLane, .newLaneDescription, .quickCapture, .laneInput, .laneRename, .laneDescription, .thoughtEdit: true
+            case .newBand, .newBandDescription, .quickCapture, .bandInput, .bandRename, .bandDescription, .thoughtEdit: true
             default: false
             }
         }
@@ -236,11 +236,11 @@ struct RootView: View {
 
     private var boardContent: some View {
         VStack(alignment: .leading, spacing: 0) {
-            lanesList
+            bandsList
         }
         .padding(6)
         .frame(minWidth: 650, idealWidth: 720, maxWidth: 780, minHeight: 190, idealHeight: 330, maxHeight: 500)
-        .background(LanesPanelBackground())
+        .background(BandsPanelBackground())
         .overlay(alignment: .bottomTrailing) {
             floatingActions
                 .padding(.trailing, 16)
@@ -251,20 +251,20 @@ struct RootView: View {
     private var boardWithSheets: some View {
         boardContent
         .confirmationDialog(
-            lanePendingDeletion.map { "Delete \($0.name)?" } ?? "Delete lane?",
+            bandPendingDeletion.map { "Delete \($0.name)?" } ?? "Delete band?",
             isPresented: Binding(
-                get: { lanePendingDeletion != nil },
-                set: { if !$0 { lanePendingDeletion = nil } }
+                get: { bandPendingDeletion != nil },
+                set: { if !$0 { bandPendingDeletion = nil } }
             ),
             titleVisibility: .visible
         ) {
-            Button("Delete Lane", role: .destructive) {
-                if let lane = lanePendingDeletion { deleteLane(lane) }
-                lanePendingDeletion = nil
+            Button("Delete Band", role: .destructive) {
+                if let band = bandPendingDeletion { deleteBand(band) }
+                bandPendingDeletion = nil
             }
-            Button("Cancel", role: .cancel) { lanePendingDeletion = nil }
+            Button("Cancel", role: .cancel) { bandPendingDeletion = nil }
         } message: {
-            Text("This permanently removes the lane and its active thoughts.")
+            Text("This permanently removes the band and its active thoughts.")
         }
         .confirmationDialog(
             thoughtPendingRelease.map { "Release \($0.text)?" } ?? "Release thought?",
@@ -276,10 +276,10 @@ struct RootView: View {
             }
             Button("Cancel", role: .cancel) { thoughtPendingRelease = nil }
         } message: {
-            Text("Released thoughts are removed from active lanes.")
+            Text("Released thoughts are removed from active bands.")
         }
         .sheet(item: $thoughtPendingMove, onDismiss: restoreSelection) { thought in
-            MoveThoughtSheet(thought: thought, lanes: lanes) { lane in move(thought, to: lane) }
+            MoveThoughtSheet(thought: thought, bands: bands) { band in move(thought, to: band) }
         }
         .sheet(isPresented: $showingSettings, onDismiss: restoreSelection) {
             SettingsView()
@@ -296,18 +296,18 @@ struct RootView: View {
                 updateCommands()
             }
             .onChange(of: appearance) { _, value in AppAppearance.apply(value) }
-            .onReceive(NotificationCenter.default.publisher(for: .lanesPanelDidOpen)) { _ in
-                if case .laneInput(let id) = focus {
-                    composingLaneID = nil
-                    selection.select(.lane(id), with: .keyboard)
-                    focus = .lane(id)
+            .onReceive(NotificationCenter.default.publisher(for: .bandsPanelDidOpen)) { _ in
+                if case .bandInput(let id) = focus {
+                    composingBandID = nil
+                    selection.select(.band(id), with: .keyboard)
+                    focus = .band(id)
                 } else if focus?.isEditing != true {
-                    composingLaneID = nil
+                    composingBandID = nil
                     restoreSelection()
                 }
                 timestampRefreshDate = .now
             }
-            .onReceive(NotificationCenter.default.publisher(for: LanesCommandDispatcher.notification)) { notification in
+            .onReceive(NotificationCenter.default.publisher(for: BandsCommandDispatcher.notification)) { notification in
                 guard let command = notification.object as? PanelCommand else { return }
                 perform(command)
             }
@@ -331,51 +331,51 @@ struct RootView: View {
                 updateCommands()
                 if id == nil { restoreSelection() }
             }
-            .onChange(of: lanePendingDeletion?.id) { _, id in
+            .onChange(of: bandPendingDeletion?.id) { _, id in
                 updateCommands()
                 if id == nil { restoreSelection() }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .lanesKeyRequest)) { notification in
+            .onReceive(NotificationCenter.default.publisher(for: .bandsKeyRequest)) { notification in
                 if let request = notification.object as? PanelKeyRequest { handleKey(request) }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .lanesPointerInput)) { _ in
+            .onReceive(NotificationCenter.default.publisher(for: .bandsPointerInput)) { _ in
                 selection.modality = .pointer
             }
             .onChange(of: focus) { _, focus in
                 updateCommands()
                 switch focus {
-                case .lane(let id):
-                    if selection.target != .lane(id) { selection.select(.lane(id), with: .keyboard) }
+                case .band(let id):
+                    if selection.target != .band(id) { selection.select(.band(id), with: .keyboard) }
                 case .thought(let id):
                     if selection.target != .thought(id) { selection.select(.thought(id), with: .keyboard) }
-                case .laneAdd(let id):
+                case .bandAdd(let id):
                     if selection.target != .addThought(id) { selection.select(.addThought(id), with: .keyboard) }
-                case .laneInput(let id), .laneRename(let id):
-                    if selection.target != .lane(id) { selection.select(.lane(id), with: .keyboard) }
-                case .laneDescription(let id):
-                    if selection.target != .lane(id) { selection.select(.lane(id), with: .keyboard) }
+                case .bandInput(let id), .bandRename(let id):
+                    if selection.target != .band(id) { selection.select(.band(id), with: .keyboard) }
+                case .bandDescription(let id):
+                    if selection.target != .band(id) { selection.select(.band(id), with: .keyboard) }
                 default: break
                 }
             }
     }
 
-    private var lanesList: some View {
+    private var bandsList: some View {
         ScrollViewReader { proxy in
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                if lanes.isEmpty {
-                    EmptyLanesView(onCreate: beginNewLane)
+                if bands.isEmpty {
+                    EmptyBandsView(onCreate: beginNewBand)
                         .frame(maxWidth: .infinity, minHeight: 180)
                 } else {
-                    ForEach(lanes) { lane in
-                        LaneRow(lane: lane, lanes: lanes, now: timestampRefreshDate, selection: $selection, focus: $focus, composingLaneID: $composingLaneID, draggingLaneID: $draggingLaneID, onDelete: deleteLane, onMoveLane: moveLane)
-                            .id(PanelSelection.Target.lane(lane.id))
+                    ForEach(bands) { band in
+                        BandRow(band: band, bands: bands, now: timestampRefreshDate, selection: $selection, focus: $focus, composingBandID: $composingBandID, draggingBandID: $draggingBandID, onDelete: deleteBand, onMoveBand: moveBand)
+                            .id(PanelSelection.Target.band(band.id))
                             .transition(reduceMotion ? .identity : .move(edge: .top).combined(with: .opacity))
-                        if lane.id != lanes.last?.id { Divider() }
+                        if band.id != bands.last?.id { Divider() }
                     }
                 }
             }
-            .animation(reduceMotion ? nil : .snappy(duration: 0.28, extraBounce: 0.08), value: lanes.map(\.id))
+            .animation(reduceMotion ? nil : .snappy(duration: 0.28, extraBounce: 0.08), value: bands.map(\.id))
             .padding(.horizontal, 14)
             .padding(.bottom, 52)
         }
@@ -385,8 +385,8 @@ struct RootView: View {
             scrollToKeyboardTarget(target, using: proxy)
         }
         .onChange(of: focus) { _, value in
-            if case .laneInput(let id) = value {
-                scrollToKeyboardTarget(.lane(id), using: proxy)
+            if case .bandInput(let id) = value {
+                scrollToKeyboardTarget(.band(id), using: proxy)
             }
         }
         }
@@ -400,8 +400,8 @@ struct RootView: View {
             withAnimation(.easeInOut(duration: 0.22)) {
                 switch target {
                 case .addThought(let id):
-                    proxy.scrollTo(PanelSelection.Target.lane(id), anchor: .center)
-                case .lane, .thought:
+                    proxy.scrollTo(PanelSelection.Target.band(id), anchor: .center)
+                case .band, .thought:
                     proxy.scrollTo(target, anchor: .center)
                 }
             }
@@ -414,91 +414,91 @@ struct RootView: View {
                 QuickCaptureBubble(
                     text: $quickCaptureText,
                     isBusy: $quickCaptureBusy,
-                    needsLane: $quickCaptureNeedsLane,
+                    needsBand: $quickCaptureNeedsBand,
                     message: $quickCaptureMessage,
-                    lanes: lanes,
+                    bands: bands,
                     onSubmit: submitQuickCapture,
-                    onChooseLane: chooseQuickCaptureLane,
+                    onChooseBand: chooseQuickCaptureBand,
                     onCancel: cancelQuickCapture
                 )
-            } else if addingLane && !enteringLaneDescription {
-                TextField("", text: $newLane,
-                          prompt: Text("New lane name…").foregroundStyle(LanesTheme.secondaryText(colorScheme)))
+            } else if addingBand && !enteringBandDescription {
+                TextField("", text: $newBand,
+                          prompt: Text("New band name…").foregroundStyle(BandsTheme.secondaryText(colorScheme)))
                     .textFieldStyle(.plain)
                     .foregroundStyle(.primary)
                     .frame(width: 160)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 8)
-                    .background(LanesTheme.controlFill(colorScheme), in: Capsule(style: .continuous))
-                    .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
+                    .background(BandsTheme.controlFill(colorScheme), in: Capsule(style: .continuous))
+                    .overlay(Capsule(style: .continuous).strokeBorder(BandsTheme.controlBorder(colorScheme)))
                     .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
-                    .onSubmit { beginLaneDescription() }.focused($focus, equals: .newLane)
-                    .onExitCommand { cancelNewLane() }
-                    .accessibilityLabel("New lane name")
+                    .onSubmit { beginBandDescription() }.focused($focus, equals: .newBand)
+                    .onExitCommand { cancelNewBand() }
+                    .accessibilityLabel("New band name")
                     .accessibilityHint("Press Return to enter a description, or Escape to cancel")
-            } else if addingLane && enteringLaneDescription {
-                TextField("", text: $newLaneDescription,
-                          prompt: Text("Lane description…").foregroundStyle(LanesTheme.secondaryText(colorScheme)))
+            } else if addingBand && enteringBandDescription {
+                TextField("", text: $newBandDescription,
+                          prompt: Text("Band description…").foregroundStyle(BandsTheme.secondaryText(colorScheme)))
                     .textFieldStyle(.plain)
                     .foregroundStyle(.primary)
                     .frame(width: 190)
                     .padding(.horizontal, 11)
                     .padding(.vertical, 8)
-                    .background(LanesTheme.controlFill(colorScheme), in: Capsule(style: .continuous))
-                    .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
+                    .background(BandsTheme.controlFill(colorScheme), in: Capsule(style: .continuous))
+                    .overlay(Capsule(style: .continuous).strokeBorder(BandsTheme.controlBorder(colorScheme)))
                     .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
-                    .onSubmit { addLane() }.focused($focus, equals: .newLaneDescription)
-                    .onExitCommand { cancelNewLane() }
-                    .accessibilityLabel("Lane description")
-                    .accessibilityHint("Enter a one-line description, then press Return to create the lane")
-            } else if draggingLaneID == nil {
+                    .onSubmit { addBand() }.focused($focus, equals: .newBandDescription)
+                    .onExitCommand { cancelNewBand() }
+                    .accessibilityLabel("Band description")
+                    .accessibilityHint("Enter a one-line description, then press Return to create the band")
+            } else if draggingBandID == nil {
                 Button(action: beginQuickCapture) {
                     Image(systemName: "bolt.fill")
                         .font(.body.weight(.semibold))
                         .frame(width: 30, height: 30)
-                        .background(LanesTheme.controlFill(colorScheme), in: Circle())
-                        .overlay(Circle().strokeBorder(LanesTheme.controlBorder(colorScheme)))
+                        .background(BandsTheme.controlFill(colorScheme), in: Circle())
+                        .overlay(Circle().strokeBorder(BandsTheme.controlBorder(colorScheme)))
                         .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.primary)
                 .pointingHandCursor()
                 .accessibilityLabel("Quick Capture")
-                .help("Quick Capture (⌥Q); open lanes (⌥L)")
-                Button { beginNewLane() } label: {
-                    Text("+ lane")
+                .help("Quick Capture (⌥Q); open bands (⌥L)")
+                Button { beginNewBand() } label: {
+                    Text("+ band")
                         .font(.subheadline.weight(.medium))
                         .padding(.horizontal, 11)
                         .padding(.vertical, 8)
-                        .background(LanesTheme.laneFill(colorScheme), in: Capsule(style: .continuous))
-                        .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
+                        .background(BandsTheme.bandFill(colorScheme), in: Capsule(style: .continuous))
+                        .overlay(Capsule(style: .continuous).strokeBorder(BandsTheme.controlBorder(colorScheme)))
                         .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(LanesTheme.laneText(colorScheme))
+                .foregroundStyle(BandsTheme.bandText(colorScheme))
                 .pointingHandCursor()
-                .accessibilityLabel("Create lane")
+                .accessibilityLabel("Create band")
             } else {
                 Image(systemName: "trash")
                     .font(.body.weight(.semibold))
                     .frame(width: 30, height: 30)
-                    .foregroundStyle(hoveringLaneBin ? .white : .red)
-                    .background(hoveringLaneBin ? Color.red : Color.red.opacity(0.12), in: Circle())
-                    .overlay(Circle().strokeBorder(Color.red.opacity(hoveringLaneBin ? 0.9 : 0.28)))
-                    .scaleEffect(hoveringLaneBin ? 1.08 : 1)
-                    .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.72), value: hoveringLaneBin)
-                    .onDrop(of: [UTType.text.identifier, UTType.data.identifier], isTargeted: $hoveringLaneBin) { providers, _ in
-                        dropLaneOnBin(providers)
+                    .foregroundStyle(hoveringBandBin ? .white : .red)
+                    .background(hoveringBandBin ? Color.red : Color.red.opacity(0.12), in: Circle())
+                    .overlay(Circle().strokeBorder(Color.red.opacity(hoveringBandBin ? 0.9 : 0.28)))
+                    .scaleEffect(hoveringBandBin ? 1.08 : 1)
+                    .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.72), value: hoveringBandBin)
+                    .onDrop(of: [UTType.text.identifier, UTType.data.identifier], isTargeted: $hoveringBandBin) { providers, _ in
+                        dropBandOnBin(providers)
                     }
-                    .accessibilityLabel("Delete lane")
-                    .accessibilityHint("Drop the dragged lane here to delete it")
+                    .accessibilityLabel("Delete band")
+                    .accessibilityHint("Drop the dragged band here to delete it")
             }
             Button(action: openSettings) {
                 Image(systemName: "gearshape")
                     .font(.body.weight(.medium))
                     .frame(width: 30, height: 30)
-                    .background(LanesTheme.controlFill(colorScheme), in: Circle())
-                    .overlay(Circle().strokeBorder(LanesTheme.controlBorder(colorScheme)))
+                    .background(BandsTheme.controlFill(colorScheme), in: Circle())
+                    .overlay(Circle().strokeBorder(BandsTheme.controlBorder(colorScheme)))
                     .shadow(color: .black.opacity(0.12), radius: 5, y: 2)
             }
             .buttonStyle(.plain)
@@ -517,52 +517,52 @@ struct RootView: View {
         guard !modalIsPresented else { return }
         quickCaptureText = ""
         quickCaptureBusy = false
-        quickCaptureNeedsLane = false
+        quickCaptureNeedsBand = false
         quickCaptureMessage = nil
         showingQuickCapture = true
         DispatchQueue.main.async { focus = .quickCapture }
     }
-    private func beginNewLane() {
-        newLane = ""
-        newLaneDescription = ""
-        enteringLaneDescription = false
-        addingLane = true
-        focus = .newLane
+    private func beginNewBand() {
+        newBand = ""
+        newBandDescription = ""
+        enteringBandDescription = false
+        addingBand = true
+        focus = .newBand
     }
-    private func beginLaneDescription() {
-        guard case .valid = LaneManagement.validateName(newLane, existingNames: lanes.map(\.name)) else { return }
-        enteringLaneDescription = true
-        DispatchQueue.main.async { focus = .newLaneDescription }
+    private func beginBandDescription() {
+        guard case .valid = BandManagement.validateName(newBand, existingNames: bands.map(\.name)) else { return }
+        enteringBandDescription = true
+        DispatchQueue.main.async { focus = .newBandDescription }
     }
-    private func cancelNewLane() {
-        addingLane = false
-        enteringLaneDescription = false
-        newLane = ""
-        newLaneDescription = ""
+    private func cancelNewBand() {
+        addingBand = false
+        enteringBandDescription = false
+        newBand = ""
+        newBandDescription = ""
         restoreSelection()
     }
-    private func addLane() {
-        guard case .valid(let name) = LaneManagement.validateName(newLane, existingNames: lanes.map(\.name)) else { return }
-        let description = newLaneDescription.trimmingCharacters(in: .whitespacesAndNewlines)
-        let lane = Lane(name: name, descriptionText: description.isEmpty ? nil : description, order: 0)
+    private func addBand() {
+        guard case .valid(let name) = BandManagement.validateName(newBand, existingNames: bands.map(\.name)) else { return }
+        let description = newBandDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        let band = Band(name: name, descriptionText: description.isEmpty ? nil : description, order: 0)
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.28, extraBounce: 0.08)) {
-            LaneManagement.insert(lane, into: lanes, atEnd: InsertionPreferences.lanesAtEnd)
-            context.insert(lane)
+            BandManagement.insert(band, into: bands, atEnd: InsertionPreferences.bandsAtEnd)
+            context.insert(band)
             try? context.save()
         }
-        addingLane = false
-        enteringLaneDescription = false
-        newLane = ""
-        newLaneDescription = ""
-        select(.lane(lane.id))
+        addingBand = false
+        enteringBandDescription = false
+        newBand = ""
+        newBandDescription = ""
+        select(.band(band.id))
     }
     private func focusQuickCapture() {
-        let targetLaneID = selection.laneID ?? selectedThought?.lane?.id
-        guard let lane = targetLaneID.flatMap({ id in lanes.first(where: { $0.id == id }) }) ?? lanes.first else { beginNewLane(); return }
-        selection.select(.lane(lane.id), with: .keyboard)
-        composingLaneID = lane.id
+        let targetBandID = selection.bandID ?? selectedThought?.band?.id
+        guard let band = targetBandID.flatMap({ id in bands.first(where: { $0.id == id }) }) ?? bands.first else { beginNewBand(); return }
+        selection.select(.band(band.id), with: .keyboard)
+        composingBandID = band.id
         // The conditional editor must exist before FocusState can target it.
-        DispatchQueue.main.async { focus = .laneInput(lane.id) }
+        DispatchQueue.main.async { focus = .bandInput(band.id) }
     }
     private func submitQuickCapture() {
         let thought = quickCaptureText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -570,51 +570,51 @@ struct RootView: View {
             quickCaptureMessage = "Enter a thought to capture."
             return
         }
-        guard !lanes.isEmpty else {
-            quickCaptureMessage = "Create a lane before capturing a thought."
+        guard !bands.isEmpty else {
+            quickCaptureMessage = "Create a band before capturing a thought."
             return
         }
 
         quickCaptureBusy = true
-        quickCaptureNeedsLane = false
+        quickCaptureNeedsBand = false
         quickCaptureMessage = nil
         Task { @MainActor in
             do {
-                let result = try await JevClient().autoCategorize(thought: thought, lanes: lanes)
+                let result = try await JevClient().autoCategorize(thought: thought, bands: bands)
                 guard result.confidence >= JevSettings.confidenceThreshold,
-                      let laneID = result.laneID,
-                      let lane = lanes.first(where: { $0.id == laneID }) else {
+                      let bandID = result.bandID,
+                      let band = bands.first(where: { $0.id == bandID }) else {
                     quickCaptureBusy = false
-                    quickCaptureNeedsLane = true
-                    quickCaptureMessage = "Jev was only \(Int((result.confidence * 100).rounded()))% confident. Choose a lane below."
+                    quickCaptureNeedsBand = true
+                    quickCaptureMessage = "Jev was only \(Int((result.confidence * 100).rounded()))% confident. Choose a band below."
                     return
                 }
-                captureQuickThought(thought, in: lane)
+                captureQuickThought(thought, in: band)
             } catch JevClientError.missingToken {
                 quickCaptureBusy = false
-                quickCaptureNeedsLane = true
-                quickCaptureMessage = "Add a Jev token in Settings, or choose a lane below."
+                quickCaptureNeedsBand = true
+                quickCaptureMessage = "Add a Jev token in Settings, or choose a band below."
             } catch {
                 quickCaptureBusy = false
-                quickCaptureNeedsLane = true
-                quickCaptureMessage = "Jev could not categorize this thought. Choose a lane below."
+                quickCaptureNeedsBand = true
+                quickCaptureMessage = "Jev could not categorize this thought. Choose a band below."
             }
         }
     }
-    private func chooseQuickCaptureLane(_ lane: Lane) {
+    private func chooseQuickCaptureBand(_ band: Band) {
         let thought = quickCaptureText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !thought.isEmpty else { return }
-        captureQuickThought(thought, in: lane)
+        captureQuickThought(thought, in: band)
     }
-    private func captureQuickThought(_ text: String, in lane: Lane) {
+    private func captureQuickThought(_ text: String, in band: Band) {
         do {
-            guard let thought = try LaneManagement.capture(text, in: lane, context: context, now: .now) else {
+            guard let thought = try BandManagement.capture(text, in: band, context: context, now: .now) else {
                 quickCaptureBusy = false
                 quickCaptureMessage = "Enter a thought to capture."
                 return
             }
             try context.save()
-            LanesNotificationBus.thoughtChanged(thought.id)
+            BandsNotificationBus.thoughtChanged(thought.id)
             selection.select(.thought(thought.id), with: .keyboard)
             showingQuickCapture = false
         } catch {
@@ -630,26 +630,26 @@ struct RootView: View {
     private func resetQuickCapture() {
         quickCaptureText = ""
         quickCaptureBusy = false
-        quickCaptureNeedsLane = false
+        quickCaptureNeedsBand = false
         quickCaptureMessage = nil
     }
     private var modalIsPresented: Bool {
-        showingSettings || showingQuickCapture || thoughtPendingMove != nil || thoughtPendingRelease != nil || lanePendingDeletion != nil
+        showingSettings || showingQuickCapture || thoughtPendingMove != nil || thoughtPendingRelease != nil || bandPendingDeletion != nil
     }
     private func updateCommands() {
         var available: Set<PanelCommand> = []
         if !modalIsPresented && focus?.isEditing != true {
-            available = [.quickCapture, .newThought, .newLane, .openSettings]
-            if selection.laneID != nil { available.insert(.editDescription) }
+            available = [.quickCapture, .newThought, .newBand, .openSettings]
+            if selection.bandID != nil { available.insert(.editDescription) }
             if case .addThought = selection.target {
                 // Return on the focused + opens its inline composer.
                 available.insert(.edit)
             }
             let targets: [PanelSelection.Target]
-            if let thought = selectedThought, let lane = thought.lane {
-                targets = laneThoughts(lane).map { .thought($0.id) }
+            if let thought = selectedThought, let band = thought.band {
+                targets = bandThoughts(band).map { .thought($0.id) }
             } else {
-                targets = lanes.map { .lane($0.id) }
+                targets = bands.map { .band($0.id) }
             }
             if let target = selection.target, let index = targets.firstIndex(of: target) {
                 available.formUnion([.edit, .destructive])
@@ -658,7 +658,7 @@ struct RootView: View {
             }
             if selectedThought != nil {
                 available.formUnion([.copy, .complete, .resetAging])
-                if lanes.count > 1 { available.insert(.move) }
+                if bands.count > 1 { available.insert(.move) }
             }
         }
         BoardCommands.shared.available = available
@@ -666,19 +666,19 @@ struct RootView: View {
     private func select(_ target: PanelSelection.Target?) {
         selection.select(target, with: .keyboard)
         // Let the destination row/control render before asking SwiftUI to focus it.
-        // This is essential for an empty lane, whose + button is the destination.
+        // This is essential for an empty band, whose + button is the destination.
         DispatchQueue.main.async { restoreSelection() }
     }
     private func restoreSelection() {
         switch selection.target {
-        case .lane(let id): focus = .lane(id)
+        case .band(let id): focus = .band(id)
         case .thought(let id): focus = .thought(id)
-        case .addThought(let id): focus = .laneAdd(id)
+        case .addThought(let id): focus = .bandAdd(id)
         case nil: focus = nil
         }
     }
-    private var boardLanes: [BoardLane] {
-        lanes.map { BoardLane(id: $0.id, thoughts: laneThoughts($0).map(\.id), thoughtsAtEnd: thoughtsAtEnd) }
+    private var boardBands: [BoardBand] {
+        bands.map { BoardBand(id: $0.id, thoughts: bandThoughts($0).map(\.id), thoughtsAtEnd: thoughtsAtEnd) }
     }
     private func handleKey(_ request: PanelKeyRequest) {
         guard !modalIsPresented else { return }
@@ -706,7 +706,7 @@ struct RootView: View {
         default: direction = nil
         }
         if let direction {
-            select(BoardNavigation.target(from: selection.target, direction: direction, lanes: boardLanes))
+            select(BoardNavigation.target(from: selection.target, direction: direction, bands: boardBands))
             request.handled = true
         }
     }
@@ -724,103 +724,103 @@ struct RootView: View {
         case .quickCapture:
             beginQuickCapture()
         case .newThought: focusQuickCapture()
-        case .newLane: beginNewLane()
+        case .newBand: beginNewBand()
         case .openSettings: openSettings()
         case .copy: if let thought = selectedThought { ThoughtClipboard.copy(thought.text) }
         case .editDescription:
-            if let laneID = selection.laneID {
-                NotificationCenter.default.post(name: .lanesBeginEditDescription, object: laneID)
+            if let bandID = selection.bandID {
+                NotificationCenter.default.post(name: .bandsBeginEditDescription, object: bandID)
             }
         case .complete: if let thought = selectedThought { complete(thought) }
         case .edit:
             if case .addThought = selection.target {
                 focusQuickCapture()
             } else if let target = selection.target {
-                NotificationCenter.default.post(name: .lanesBeginEdit, object: target)
+                NotificationCenter.default.post(name: .bandsBeginEdit, object: target)
             }
         case .resetAging: if let thought = selectedThought { resetAging(thought) }
-        case .move: if let thought = selectedThought, lanes.count > 1 { thoughtPendingMove = thought }
+        case .move: if let thought = selectedThought, bands.count > 1 { thoughtPendingMove = thought }
         case .moveEarlier: moveSelected(.up)
         case .moveLater: moveSelected(.down)
         case .destructive:
             if let thought = selectedThought { thoughtPendingRelease = thought }
-            else if let laneID = selection.laneID, let lane = lanes.first(where: { $0.id == laneID }) { lanePendingDeletion = lane }
+            else if let bandID = selection.bandID, let band = bands.first(where: { $0.id == bandID }) { bandPendingDeletion = band }
         }
     }
-    private func moveLanes(from source: IndexSet, to destination: Int) { _ = LaneManagement.reordered(lanes, moving: source, to: destination); try? context.save() }
-    private func moveLane(_ lane: Lane, onto target: Lane) {
-        guard lane.id != target.id,
-              let sourceIndex = lanes.firstIndex(where: { $0.id == lane.id }),
-              let targetIndex = lanes.firstIndex(where: { $0.id == target.id }) else { return }
+    private func moveBands(from source: IndexSet, to destination: Int) { _ = BandManagement.reordered(bands, moving: source, to: destination); try? context.save() }
+    private func moveBand(_ band: Band, onto target: Band) {
+        guard band.id != target.id,
+              let sourceIndex = bands.firstIndex(where: { $0.id == band.id }),
+              let targetIndex = bands.firstIndex(where: { $0.id == target.id }) else { return }
 
-        // A drop is interpreted as placing the dragged lane after the lane it lands on.
+        // A drop is interpreted as placing the dragged band after the band it lands on.
         // Array.move(toOffset:) uses the post-removal offset, so adjust when moving down.
         let destination = sourceIndex < targetIndex ? targetIndex + 1 : targetIndex
         withAnimation(reduceMotion ? nil : .snappy(duration: 0.28, extraBounce: 0.08)) {
-            _ = LaneManagement.reordered(lanes, moving: IndexSet(integer: sourceIndex), to: destination)
+            _ = BandManagement.reordered(bands, moving: IndexSet(integer: sourceIndex), to: destination)
             try? context.save()
         }
     }
-    private func laneThoughts(_ lane: Lane) -> [Thought] {
+    private func bandThoughts(_ band: Band) -> [Thought] {
         ((try? context.fetch(FetchDescriptor<Thought>())) ?? [])
-            .filter { $0.lane?.id == lane.id && $0.completedAt == nil && $0.releasedAt == nil }
+            .filter { $0.band?.id == band.id && $0.completedAt == nil && $0.releasedAt == nil }
             .sorted { ($0.order ?? 0, $0.createdAt) > ($1.order ?? 0, $1.createdAt) }
     }
     private func complete(_ thought: Thought) {
         selectAdjacent(after: thought)
         ThoughtManagement.complete(thought, now: .now)
         try? context.save()
-        LanesNotificationBus.thoughtChanged(thought.id)
+        BandsNotificationBus.thoughtChanged(thought.id)
     }
     private func release(_ thought: Thought) {
         selectAdjacent(after: thought)
         ThoughtManagement.letGo(thought, now: .now)
         try? context.save()
-        LanesNotificationBus.thoughtChanged(thought.id)
+        BandsNotificationBus.thoughtChanged(thought.id)
     }
-    private func resetAging(_ thought: Thought) { ThoughtManagement.resetAging(thought, now: .now); try? context.save(); LanesNotificationBus.thoughtChanged(thought.id) }
-    private func move(_ thought: Thought, to lane: Lane) {
-        let destination = laneThoughts(lane)
-        ThoughtManagement.reorder(thought, to: lane, among: destination, at: 0, now: .now)
+    private func resetAging(_ thought: Thought) { ThoughtManagement.resetAging(thought, now: .now); try? context.save(); BandsNotificationBus.thoughtChanged(thought.id) }
+    private func move(_ thought: Thought, to band: Band) {
+        let destination = bandThoughts(band)
+        ThoughtManagement.reorder(thought, to: band, among: destination, at: 0, now: .now)
         try? context.save()
         selection.select(.thought(thought.id), with: .keyboard)
         focus = .thought(thought.id)
     }
     private func moveSelected(_ direction: PanelMoveDirection) {
-        if let thought = selectedThought, let lane = thought.lane, ThoughtManagement.moveWithinLane(thought, among: laneThoughts(lane), direction: direction, now: .now) { try? context.save() }
-        else if let laneID = selection.laneID, let current = lanes.firstIndex(where: { $0.id == laneID }) {
+        if let thought = selectedThought, let band = thought.band, ThoughtManagement.moveWithinBand(thought, among: bandThoughts(band), direction: direction, now: .now) { try? context.save() }
+        else if let bandID = selection.bandID, let current = bands.firstIndex(where: { $0.id == bandID }) {
             let destination = direction == .up ? current - 1 : current + 1
-            guard lanes.indices.contains(destination) else { return }
-            _ = LaneManagement.reordered(lanes, moving: IndexSet(integer: current), to: direction == .up ? destination : destination + 1)
+            guard bands.indices.contains(destination) else { return }
+            _ = BandManagement.reordered(bands, moving: IndexSet(integer: current), to: direction == .up ? destination : destination + 1)
             try? context.save()
         }
     }
     private func selectAdjacent(after thought: Thought) {
-        guard let lane = boardLanes.first(where: { $0.id == thought.lane?.id }) else { select(nil); return }
-        select(BoardNavigation.afterRemoving(thought.id, from: lane))
+        guard let band = boardBands.first(where: { $0.id == thought.band?.id }) else { select(nil); return }
+        select(BoardNavigation.afterRemoving(thought.id, from: band))
     }
-    private func deleteLane(_ lane: Lane) {
-        let index = lanes.firstIndex(where: { $0.id == lane.id }) ?? 0
-        let remaining = lanes.filter { $0.id != lane.id }
+    private func deleteBand(_ band: Band) {
+        let index = bands.firstIndex(where: { $0.id == band.id }) ?? 0
+        let remaining = bands.filter { $0.id != band.id }
         let next = remaining.isEmpty ? nil : remaining[min(index, remaining.count - 1)]
         let thoughts = (try? context.fetch(FetchDescriptor<Thought>())) ?? []
-        let affected = thoughts.filter { $0.lane?.id == lane.id }
+        let affected = thoughts.filter { $0.band?.id == band.id }
         let ids = affected.map(\.id)
         affected.forEach(context.delete)
-        context.delete(lane)
+        context.delete(band)
         try? context.save()
-        ids.forEach(LanesNotificationBus.thoughtChanged)
-        select(next.map { .lane($0.id) })
+        ids.forEach(BandsNotificationBus.thoughtChanged)
+        select(next.map { .band($0.id) })
     }
-    private func dropLaneOnBin(_ providers: [NSItemProvider]) -> Bool {
+    private func dropBandOnBin(_ providers: [NSItemProvider]) -> Bool {
         guard let provider = providers.first else { return false }
         provider.loadObject(ofClass: NSString.self) { object, _ in
             guard let raw = object as? String, let id = UUID(uuidString: raw) else { return }
             DispatchQueue.main.async {
-                guard let lane = lanes.first(where: { $0.id == id }) else { return }
-                lanePendingDeletion = lane
-                draggingLaneID = nil
-                hoveringLaneBin = false
+                guard let band = bands.first(where: { $0.id == id }) else { return }
+                bandPendingDeletion = band
+                draggingBandID = nil
+                hoveringBandBin = false
             }
         }
         return true
@@ -842,23 +842,23 @@ private struct MCPControl: View {
             .toggleStyle(.switch)
         .pointingHandCursor()
         .accessibilityLabel("MCP connection")
-        .accessibilityHint("Toggle MCP access to your lanes and thoughts")
+        .accessibilityHint("Toggle MCP access to your bands and thoughts")
         .onAppear {
             UserDefaults.standard.register(defaults: [MCPSettings.enabledKey: true])
         }
     }
 }
 
-struct EmptyLanesView: View {
+struct EmptyBandsView: View {
     let onCreate: () -> Void
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: "square.stack.3d.up")
                 .font(.title2).foregroundStyle(.tertiary).accessibilityHidden(true)
-            Text("No lanes yet").font(.headline)
-            Text("Create a lane to give your thoughts a place to land.")
+            Text("No bands yet").font(.headline)
+            Text("Create a band to give your thoughts a place to land.")
                 .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
-            Button("Create lane", action: onCreate)
+            Button("Create band", action: onCreate)
                 .buttonStyle(.bordered)
                 .pointingHandCursor()
         }.frame(maxWidth: 300).accessibilityElement(children: .combine)
@@ -885,14 +885,14 @@ enum AppAppearance: String, CaseIterable, Identifiable {
     }
 }
 
-struct LanesPanelBackground: View {
+struct BandsPanelBackground: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private let cornerRadius: CGFloat = 22
 
     var body: some View {
         RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(LanesTheme.panel(colorScheme))
+            .fill(BandsTheme.panel(colorScheme))
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(
@@ -906,11 +906,11 @@ struct LanesPanelBackground: View {
 private struct QuickCaptureBubble: View {
     @Binding var text: String
     @Binding var isBusy: Bool
-    @Binding var needsLane: Bool
+    @Binding var needsBand: Bool
     @Binding var message: String?
-    let lanes: [Lane]
+    let bands: [Band]
     let onSubmit: () -> Void
-    let onChooseLane: (Lane) -> Void
+    let onChooseBand: (Band) -> Void
     let onCancel: () -> Void
 
     @Environment(\.colorScheme) private var colorScheme
@@ -918,7 +918,7 @@ private struct QuickCaptureBubble: View {
 
     var body: some View {
         VStack(alignment: .trailing, spacing: 6) {
-            ThoughtBubble(fill: LanesTheme.controlFill(colorScheme)) {
+            ThoughtBubble(fill: BandsTheme.controlFill(colorScheme)) {
                 HStack(spacing: 6) {
                     ZStack(alignment: .leading) {
                         TextField("", text: $text, axis: .vertical)
@@ -927,14 +927,14 @@ private struct QuickCaptureBubble: View {
                             // ThoughtBubble adds 24 points of horizontal padding,
                             // plus the return/spinner affordance and its gap.
                             // Keep the editor inside the width reserved by the
-                            // floating action row, just like the add-lane field.
+                            // floating action row, just like the add-band field.
                             .frame(width: 210, alignment: .leading)
                             .focused($focused)
                             .onSubmit { if !isBusy { onSubmit() } }
                             .disabled(isBusy)
                         if text.isEmpty {
                             Text("Add thought")
-                                .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                                .foregroundStyle(BandsTheme.secondaryText(colorScheme))
                                 .allowsHitTesting(false)
                         }
                     }
@@ -949,34 +949,34 @@ private struct QuickCaptureBubble: View {
             }
             .frame(width: 252, alignment: .leading)
 
-            if message != nil || needsLane {
+            if message != nil || needsBand {
                 VStack(alignment: .leading, spacing: 6) {
                     if let message {
                         Text(message)
                             .font(.caption)
-                            .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                            .foregroundStyle(BandsTheme.secondaryText(colorScheme))
                     }
-                    if needsLane {
+                    if needsBand {
                         FlowLayout(spacing: 7) {
-                            Text("Choose lane")
+                            Text("Choose band")
                                 .font(.caption.weight(.semibold))
-                                .foregroundStyle(LanesTheme.secondaryText(colorScheme))
-                            ForEach(lanes) { lane in
-                                Button(lane.name) { onChooseLane(lane) }
+                                .foregroundStyle(BandsTheme.secondaryText(colorScheme))
+                            ForEach(bands) { band in
+                                Button(band.name) { onChooseBand(band) }
                                     .buttonStyle(.plain)
                                     .font(.caption)
-                                    .foregroundStyle(LanesTheme.laneText(colorScheme))
+                                    .foregroundStyle(BandsTheme.bandText(colorScheme))
                                     .padding(.horizontal, 9)
                                     .padding(.vertical, 5)
-                                    .background(LanesTheme.laneFill(colorScheme), in: Capsule(style: .continuous))
-                                    .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
+                                    .background(BandsTheme.bandFill(colorScheme), in: Capsule(style: .continuous))
+                                    .overlay(Capsule(style: .continuous).strokeBorder(BandsTheme.controlBorder(colorScheme)))
                             }
                         }
                     }
                 }
                 .padding(8)
-                .background(LanesTheme.controlFill(colorScheme), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(LanesTheme.controlBorder(colorScheme)))
+                .background(BandsTheme.controlFill(colorScheme), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(BandsTheme.controlBorder(colorScheme)))
             }
 
         }
@@ -990,7 +990,7 @@ struct SettingsView: View {
     @AppStorage("appearance") private var appearance = AppAppearance.system.rawValue
     @AppStorage(ThoughtNotificationSettings.enabledKey) private var notificationsEnabled = ThoughtNotificationSettings.defaultEnabled
     @AppStorage(InsertionPreferences.thoughtsAtEndKey) private var thoughtsAtEnd = false
-    @AppStorage(InsertionPreferences.lanesAtEndKey) private var lanesAtEnd = false
+    @AppStorage(InsertionPreferences.bandsAtEndKey) private var bandsAtEnd = false
     @EnvironmentObject private var agingStore: ThoughtAgingSettingsStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
@@ -1031,7 +1031,7 @@ struct SettingsView: View {
                 }
                 Text("System follows your Mac’s appearance automatically.")
                     .font(.caption)
-                    .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                    .foregroundStyle(BandsTheme.secondaryText(colorScheme))
                     .padding(.top, 5)
             }
             Divider()
@@ -1050,9 +1050,9 @@ struct SettingsView: View {
                 .padding(.vertical, 4)
                 Divider()
                 HStack {
-                    Text("New lanes")
+                    Text("New bands")
                     Spacer()
-                    Picker("Lane placement", selection: $lanesAtEnd) {
+                    Picker("Band placement", selection: $bandsAtEnd) {
                         Text("Top").tag(false)
                         Text("Bottom").tag(true)
                     }
@@ -1066,7 +1066,7 @@ struct SettingsView: View {
             SettingsSection(title: "Thought aging") {
                 Text("Set when a thought begins to draw attention.")
                     .font(.caption)
-                    .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                    .foregroundStyle(BandsTheme.secondaryText(colorScheme))
                     .padding(.bottom, 6)
                 ThresholdStepper(title: "Fresh", minutes: $fresh)
                 Divider()
@@ -1090,7 +1090,7 @@ struct SettingsView: View {
                     .toggleStyle(.switch)
                     .pointingHandCursor()
                     .onChange(of: notificationsEnabled) { _, value in
-                        NotificationCenter.default.post(name: .lanesNotificationPreferenceChanged, object: nil, userInfo: ["enabled": value])
+                        NotificationCenter.default.post(name: .bandsNotificationPreferenceChanged, object: nil, userInfo: ["enabled": value])
                     }
             }
             .padding(.vertical, 4)
@@ -1105,7 +1105,7 @@ struct SettingsView: View {
             SettingsSection(title: "Jev") {
                 Text("Configure automatic thought categorization with Jev.")
                     .font(.caption)
-                    .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                    .foregroundStyle(BandsTheme.secondaryText(colorScheme))
                     .padding(.bottom, 4)
                 HStack {
                     Text("Minimum confidence")
@@ -1129,12 +1129,12 @@ struct SettingsView: View {
             }
             Divider()
             SettingsSection(title: "Keyboard shortcuts") {
-                ShortcutRow(title: "Change lane", shortcut: "↑ / ↓")
+                ShortcutRow(title: "Change band", shortcut: "↑ / ↓")
                 ShortcutRow(title: "Navigate thoughts", shortcut: "← / →")
-                ShortcutRow(title: "Select lane name", shortcut: "← from first thought / +")
+                ShortcutRow(title: "Select band name", shortcut: "← from first thought / +")
                 ShortcutRow(title: "Open selected +", shortcut: "Return")
                 ShortcutRow(title: "Cancel editor / close panel", shortcut: "Esc")
-                Text("Arrow navigation applies when browsing. Empty lanes use + as their content target. Return renames a selected lane name or opens a selected +. Text fields keep standard editing keys. New Thought uses the selected lane; Quick Capture asks Jev to choose a lane and lets you choose manually when needed.")
+                Text("Arrow navigation applies when browsing. Empty bands use + as their content target. Return renames a selected band name or opens a selected +. Text fields keep standard editing keys. New Thought uses the selected band; Quick Capture asks Jev to choose a band and lets you choose manually when needed.")
                     .font(.caption).foregroundStyle(.secondary)
                 ForEach(Array(PanelCommand.reference.enumerated()), id: \.element) { index, command in
                     ShortcutRow(title: command.title, shortcut: command.shortcut)
@@ -1168,7 +1168,7 @@ struct SettingsView: View {
             Divider()
             Text("Version \(appVersion)")
                 .font(.caption)
-                .foregroundStyle(LanesTheme.secondaryText(colorScheme))
+                .foregroundStyle(BandsTheme.secondaryText(colorScheme))
                 .frame(maxWidth: .infinity, alignment: .center)
             }
             .padding(18)
@@ -1177,7 +1177,7 @@ struct SettingsView: View {
         }
         .scrollIndicators(.visible)
         .frame(width: 460, height: 520, alignment: .topLeading)
-        .background(LanesTheme.panel(colorScheme))
+        .background(BandsTheme.panel(colorScheme))
         .onAppear {
             initialAppearance = appearance
             setDraft(agingStore.settings)
@@ -1264,32 +1264,32 @@ private struct ShortcutRow: View {
 
 private struct MoveThoughtSheet: View {
     let thought: Thought
-    let lanes: [Lane]
-    let onMove: (Lane) -> Void
+    let bands: [Band]
+    let onMove: (Band) -> Void
     @Environment(\.dismiss) private var dismiss
     @FocusState private var focusPicker: Bool
     @State private var destinationID: UUID
 
-    init(thought: Thought, lanes: [Lane], onMove: @escaping (Lane) -> Void) {
+    init(thought: Thought, bands: [Band], onMove: @escaping (Band) -> Void) {
         self.thought = thought
-        self.lanes = lanes
+        self.bands = bands
         self.onMove = onMove
-        _destinationID = State(initialValue: lanes.first(where: { $0.id != thought.lane?.id })?.id ?? thought.lane?.id ?? UUID())
+        _destinationID = State(initialValue: bands.first(where: { $0.id != thought.band?.id })?.id ?? thought.band?.id ?? UUID())
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("Move Thought").font(.headline)
             Text(thought.text).lineLimit(2).foregroundStyle(.secondary)
-            Picker("Move to lane", selection: $destinationID) {
-                ForEach(lanes.filter { $0.id != thought.lane?.id }) { lane in Text(lane.name).tag(lane.id) }
+            Picker("Move to band", selection: $destinationID) {
+                ForEach(bands.filter { $0.id != thought.band?.id }) { band in Text(band.name).tag(band.id) }
             }
             .focused($focusPicker)
             HStack {
                 Spacer()
                 Button("Cancel", role: .cancel) { dismiss() }
                 Button("Move") {
-                    if let lane = lanes.first(where: { $0.id == destinationID }) { onMove(lane) }
+                    if let band = bands.first(where: { $0.id == destinationID }) { onMove(band) }
                     dismiss()
                 }
                 .keyboardShortcut(.defaultAction)
@@ -1328,70 +1328,70 @@ private struct ThresholdStepper: View {
 }
 
 extension Notification.Name {
-    static let lanesPanelDidOpen = Notification.Name("lanes.panelDidOpen")
-    static let lanesBeginEdit = Notification.Name("lanes.beginEdit")
-    static let lanesBeginEditDescription = Notification.Name("lanes.beginEditDescription")
+    static let bandsPanelDidOpen = Notification.Name("bands.panelDidOpen")
+    static let bandsBeginEdit = Notification.Name("bands.beginEdit")
+    static let bandsBeginEditDescription = Notification.Name("bands.beginEditDescription")
 }
 
-struct LaneRow: View {
-    private static let laneNameFont = Font.subheadline.weight(.semibold)
-    private static let lanePillHorizontalPadding: CGFloat = 11
-    private static let lanePillVerticalPadding: CGFloat = 8
-    private static let lanePillCornerRadius: CGFloat = 9
+struct BandRow: View {
+    private static let bandNameFont = Font.subheadline.weight(.semibold)
+    private static let bandPillHorizontalPadding: CGFloat = 11
+    private static let bandPillVerticalPadding: CGFloat = 8
+    private static let bandPillCornerRadius: CGFloat = 9
 
     @Environment(\.modelContext) private var context
-    @Bindable var lane: Lane
+    @Bindable var band: Band
     @Query(sort: [SortDescriptor(\Thought.order, order: .reverse), SortDescriptor(\Thought.createdAt, order: .reverse)]) private var allThoughts: [Thought]
-    let lanes: [Lane]
+    let bands: [Band]
     let now: Date
     @Binding var selection: PanelSelection
     @FocusState.Binding var focus: RootView.PanelFocus?
-    @Binding var composingLaneID: UUID?
-    @Binding var draggingLaneID: UUID?
+    @Binding var composingBandID: UUID?
+    @Binding var draggingBandID: UUID?
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage(InsertionPreferences.thoughtsAtEndKey) private var thoughtsAtEnd = false
-    let onDelete: (Lane) -> Void
-    let onMoveLane: (Lane, Lane) -> Void
-    @State private var input = ""; @State private var editing = false; @State private var name = ""; @State private var editingDescription = false; @State private var descriptionDraft = ""; @State private var showingDeleteConfirmation = false; @State private var hoveringAdd = false; @State private var hoveringLane = false; @State private var dropTargeted = false; @State private var thoughtFrames: [UUID: CGRect] = [:]
+    let onDelete: (Band) -> Void
+    let onMoveBand: (Band, Band) -> Void
+    @State private var input = ""; @State private var editing = false; @State private var name = ""; @State private var editingDescription = false; @State private var descriptionDraft = ""; @State private var showingDeleteConfirmation = false; @State private var hoveringAdd = false; @State private var hoveringBand = false; @State private var dropTargeted = false; @State private var thoughtFrames: [UUID: CGRect] = [:]
     @State private var insertionIndex: Int?
-    @State private var laneDropAfter = false
+    @State private var bandDropAfter = false
     var thoughts: [Thought] {
         allThoughts
-            .filter { $0.lane?.id == lane.id && $0.completedAt == nil && $0.releasedAt == nil }
+            .filter { $0.band?.id == band.id && $0.completedAt == nil && $0.releasedAt == nil }
             .sorted { ($0.order ?? 0, $0.createdAt) > ($1.order ?? 0, $1.createdAt) }
     }
     var body: some View {
-        laneFlow
+        bandFlow
         .padding(.vertical, 8)
         .padding(.horizontal, dropTargeted ? 5 : 0)
         .background {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color.primary.opacity(dropTargeted && draggingLaneID == nil ? 0.055 : 0))
+                .fill(Color.primary.opacity(dropTargeted && draggingBandID == nil ? 0.055 : 0))
                 .overlay {
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(Color.primary.opacity(dropTargeted && draggingLaneID == nil ? 0.18 : 0), lineWidth: 1)
+                        .strokeBorder(Color.primary.opacity(dropTargeted && draggingBandID == nil ? 0.18 : 0), lineWidth: 1)
                 }
         }
         .overlay {
-            if dropTargeted && draggingLaneID != nil {
+            if dropTargeted && draggingBandID != nil {
                 VStack(spacing: 0) {
-                    if !laneDropAfter { LaneInsertionIndicator() }
+                    if !bandDropAfter { BandInsertionIndicator() }
                     Spacer(minLength: 0)
-                    if laneDropAfter { LaneInsertionIndicator() }
+                    if bandDropAfter { BandInsertionIndicator() }
                 }
             }
         }
         .animation(reduceMotion ? nil : .spring(response: 0.28, dampingFraction: 0.76), value: dropTargeted)
         .contentShape(Rectangle())
-        .coordinateSpace(name: lane.id.uuidString)
+        .coordinateSpace(name: band.id.uuidString)
         .onPreferenceChange(ThoughtFramePreferenceKey.self) { thoughtFrames = $0 }
-        .onDrop(of: [UTType.text.identifier, UTType.data.identifier], delegate: LaneDropDelegate(
+        .onDrop(of: [UTType.text.identifier, UTType.data.identifier], delegate: BandDropDelegate(
             updateLocation: { location in
-                if draggingLaneID == nil {
+                if draggingBandID == nil {
                     insertionIndex = insertionIndex(at: location, in: thoughts)
                 } else {
-                    laneDropAfter = location.y > 42
+                    bandDropAfter = location.y > 42
                     insertionIndex = nil
                 }
             },
@@ -1401,31 +1401,31 @@ struct LaneRow: View {
                     DispatchQueue.main.async {
                         _ = handleDrop(raw: raw, at: location)
                         insertionIndex = nil
-                        draggingLaneID = nil
+                        draggingBandID = nil
                     }
                 }
             },
             isTargeted: $dropTargeted,
             insertionIndex: $insertionIndex
         ))
-        .contextMenu { Button("Rename") { beginRename() }; Button("Edit Description") { beginEditDescription() }; Button("Add Thought") { beginAdd() }; Divider(); Button("Delete Lane", role: .destructive, action: requestDeletion) }
-        .confirmationDialog("Delete \"\(lane.name)\"?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) { Button("Delete Lane", role: .destructive) { onDelete(lane) }; Button("Cancel", role: .cancel) {} } message: { Text("This will delete its \(thoughts.count) active thought\(thoughts.count == 1 ? "" : "s").") }
+        .contextMenu { Button("Rename") { beginRename() }; Button("Edit Description") { beginEditDescription() }; Button("Add Thought") { beginAdd() }; Divider(); Button("Delete Band", role: .destructive, action: requestDeletion) }
+        .confirmationDialog("Delete \"\(band.name)\"?", isPresented: $showingDeleteConfirmation, titleVisibility: .visible) { Button("Delete Band", role: .destructive) { onDelete(band) }; Button("Cancel", role: .cancel) {} } message: { Text("This will delete its \(thoughts.count) active thought\(thoughts.count == 1 ? "" : "s").") }
         .onChange(of: focus) { _, focus in
-            if focus == .laneRename(lane.id), !editing { beginRename() }
+            if focus == .bandRename(band.id), !editing { beginRename() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: .lanesBeginEdit)) { notification in
+        .onReceive(NotificationCenter.default.publisher(for: .bandsBeginEdit)) { notification in
             guard let target = notification.object as? PanelSelection.Target,
-                  target == .lane(lane.id) else { return }
+                  target == .band(band.id) else { return }
             beginRename()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .lanesBeginEditDescription)) { notification in
-            guard let target = notification.object as? UUID, target == lane.id else { return }
+        .onReceive(NotificationCenter.default.publisher(for: .bandsBeginEditDescription)) { notification in
+            guard let target = notification.object as? UUID, target == band.id else { return }
             beginEditDescription()
         }
     }
-    private var laneFlow: some View {
+    private var bandFlow: some View {
         FlowLayout {
-            lanePill
+            bandPill
             if !thoughtsAtEnd { thoughtAdditionControl }
             thoughtItems
             if thoughtsAtEnd { thoughtAdditionControl }
@@ -1434,99 +1434,99 @@ struct LaneRow: View {
     @ViewBuilder private var thoughtItems: some View {
         ForEach(Array(thoughts.enumerated()), id: \.element.id) { index, thought in
             if dropTargeted && insertionIndex == index { ThoughtInsertionIndicator() }
-            ThoughtChip(thought: thought, laneID: lane.id, now: now, selection: $selection, focus: $focus)
+            ThoughtChip(thought: thought, bandID: band.id, now: now, selection: $selection, focus: $focus)
                 .id(PanelSelection.Target.thought(thought.id))
         }
         if dropTargeted && insertionIndex == thoughts.count { ThoughtInsertionIndicator() }
     }
-    private var lanePill: some View {
+    private var bandPill: some View {
         HStack(spacing: 0) {
             if editing {
-                TextField("Lane name", text: $name).textFieldStyle(.plain).focused($focus, equals: .laneRename(lane.id)).onSubmit { saveName() }.onExitCommand { cancelRename() }
-                    .onAppear { DispatchQueue.main.async { focus = .laneRename(lane.id) } }
+                TextField("Band name", text: $name).textFieldStyle(.plain).focused($focus, equals: .bandRename(band.id)).onSubmit { saveName() }.onExitCommand { cancelRename() }
+                    .onAppear { DispatchQueue.main.async { focus = .bandRename(band.id) } }
             } else if editingDescription {
                 ZStack(alignment: .leading) {
                     TextField("", text: $descriptionDraft)
                         .textFieldStyle(.plain)
-                        .foregroundStyle(LanesTheme.laneText(colorScheme))
+                        .foregroundStyle(BandsTheme.bandText(colorScheme))
                     if descriptionDraft.isEmpty {
-                        Text("Lane description")
-                            .foregroundStyle(LanesTheme.laneText(colorScheme).opacity(0.55))
+                        Text("Band description")
+                            .foregroundStyle(BandsTheme.bandText(colorScheme).opacity(0.55))
                             .allowsHitTesting(false)
                     }
                 }
                     .frame(minWidth: 220)
-                    .focused($focus, equals: .laneDescription(lane.id))
+                    .focused($focus, equals: .bandDescription(band.id))
                     .onSubmit { saveDescription() }
                     .onExitCommand { cancelDescriptionEdit() }
-                    .onAppear { DispatchQueue.main.async { focus = .laneDescription(lane.id) } }
+                    .onAppear { DispatchQueue.main.async { focus = .bandDescription(band.id) } }
             } else {
-                Text(lane.name)
+                Text(band.name)
                     .contentShape(Rectangle())
-                    .onTapGesture { selection.select(.lane(lane.id), with: .pointer); focus = .lane(lane.id) }
-                    .focusable().focused($focus, equals: .lane(lane.id))
+                    .onTapGesture { selection.select(.band(band.id), with: .pointer); focus = .band(band.id) }
+                    .focusable().focused($focus, equals: .band(band.id))
                     .onKeyPress(.return) { beginRename(); return .handled }
             }
         }
-        .font(Self.laneNameFont).foregroundStyle(LanesTheme.laneText(colorScheme))
-        .padding(.horizontal, Self.lanePillHorizontalPadding).padding(.vertical, Self.lanePillVerticalPadding)
-        .background(LanesTheme.laneFill(colorScheme), in: RoundedRectangle(cornerRadius: Self.lanePillCornerRadius, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: Self.lanePillCornerRadius, style: .continuous).strokeBorder(.black.opacity(0.10)))
-        .overlay { if focus == .lane(lane.id) && selection.target == .lane(lane.id) && selection.showsKeyboardFocus && !editing { RoundedRectangle(cornerRadius: Self.lanePillCornerRadius + 3, style: .continuous).stroke(LanesTheme.keyboardFocus(colorScheme), lineWidth: 2).padding(-3).allowsHitTesting(false) } }
-        .onHover { hoveringLane = $0 }.pointingHandCursor()
-        .rotationEffect(.degrees(hoveringLane && !editing ? -2 : 0), anchor: .center)
-        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.58), value: hoveringLane)
+        .font(Self.bandNameFont).foregroundStyle(BandsTheme.bandText(colorScheme))
+        .padding(.horizontal, Self.bandPillHorizontalPadding).padding(.vertical, Self.bandPillVerticalPadding)
+        .background(BandsTheme.bandFill(colorScheme), in: RoundedRectangle(cornerRadius: Self.bandPillCornerRadius, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: Self.bandPillCornerRadius, style: .continuous).strokeBorder(.black.opacity(0.10)))
+        .overlay { if focus == .band(band.id) && selection.target == .band(band.id) && selection.showsKeyboardFocus && !editing { RoundedRectangle(cornerRadius: Self.bandPillCornerRadius + 3, style: .continuous).stroke(BandsTheme.keyboardFocus(colorScheme), lineWidth: 2).padding(-3).allowsHitTesting(false) } }
+        .onHover { hoveringBand = $0 }.pointingHandCursor()
+        .rotationEffect(.degrees(hoveringBand && !editing ? -2 : 0), anchor: .center)
+        .animation(reduceMotion ? nil : .spring(response: 0.32, dampingFraction: 0.58), value: hoveringBand)
         // Keep the source on a plain view. Interactive controls can consume
         // the mouse gesture before SwiftUI creates the drag provider.
-        .onDrag { draggingLaneID = lane.id; return NSItemProvider(object: lane.id.uuidString as NSString) } preview: {
-            LaneDragPreview(name: lane.name)
+        .onDrag { draggingBandID = band.id; return NSItemProvider(object: band.id.uuidString as NSString) } preview: {
+            BandDragPreview(name: band.name)
         }
-        .focusEffectDisabled().accessibilityLabel("Lane \(lane.name)")
+        .focusEffectDisabled().accessibilityLabel("Band \(band.name)")
     }
     private func beginRename() {
         editingDescription = false
-        name = lane.name
+        name = band.name
         editing = true
-        DispatchQueue.main.async { focus = .laneRename(lane.id) }
+        DispatchQueue.main.async { focus = .bandRename(band.id) }
     }
     private func beginEditDescription() {
         editing = false
-        descriptionDraft = lane.descriptionText ?? ""
+        descriptionDraft = band.descriptionText ?? ""
         editingDescription = true
-        selection.select(.lane(lane.id), with: .keyboard)
-        DispatchQueue.main.async { focus = .laneDescription(lane.id) }
+        selection.select(.band(band.id), with: .keyboard)
+        DispatchQueue.main.async { focus = .bandDescription(band.id) }
     }
     private func requestDeletion() {
         showingDeleteConfirmation = true
     }
-    private func cancelRename() { editing = false; name = ""; focus = .lane(lane.id) }
-    private func cancelDescriptionEdit() { editingDescription = false; descriptionDraft = ""; focus = .lane(lane.id) }
+    private func cancelRename() { editing = false; name = ""; focus = .band(band.id) }
+    private func cancelDescriptionEdit() { editingDescription = false; descriptionDraft = ""; focus = .band(band.id) }
     private func saveDescription() {
         let value = descriptionDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        lane.descriptionText = value.isEmpty ? nil : value
+        band.descriptionText = value.isEmpty ? nil : value
         try? context.save()
         cancelDescriptionEdit()
     }
-    private func saveName() { guard case .valid(let value) = LaneManagement.validateName(name, existingNames: lanes.map(\.name), excluding: lane.name) else { return }; lane.name = value; try? context.save(); cancelRename() }
+    private func saveName() { guard case .valid(let value) = BandManagement.validateName(name, existingNames: bands.map(\.name), excluding: band.name) else { return }; band.name = value; try? context.save(); cancelRename() }
     private func beginAdd() {
         input = ""
-        composingLaneID = lane.id
-        DispatchQueue.main.async { focus = .laneInput(lane.id) }
+        composingBandID = band.id
+        DispatchQueue.main.async { focus = .bandInput(band.id) }
     }
-    private func cancelAdd() { composingLaneID = nil; input = ""; selection.select(.lane(lane.id), with: .keyboard); focus = .lane(lane.id) }
+    private func cancelAdd() { composingBandID = nil; input = ""; selection.select(.band(band.id), with: .keyboard); focus = .band(band.id) }
     @ViewBuilder private var thoughtAdditionControl: some View {
-        if composingLaneID == lane.id {
+        if composingBandID == band.id {
             ThoughtBubble {
                 HStack(spacing: 6) {
                     TextField("", text: $input,
-                              prompt: Text("Add thought").foregroundStyle(LanesTheme.secondaryText(colorScheme)))
+                              prompt: Text("Add thought").foregroundStyle(BandsTheme.secondaryText(colorScheme)))
                         .textFieldStyle(.plain)
                         .frame(minWidth: 112)
-                        .focused($focus, equals: .laneInput(lane.id))
-                        .onAppear { DispatchQueue.main.async { focus = .laneInput(lane.id) } }
+                        .focused($focus, equals: .bandInput(band.id))
+                        .onAppear { DispatchQueue.main.async { focus = .bandInput(band.id) } }
                         .onSubmit { addThought() }
                         .onExitCommand { cancelAdd() }
-                        .accessibilityLabel("New thought in \(lane.name)")
+                        .accessibilityLabel("New thought in \(band.name)")
                         .accessibilityHint("Press Return to save, or Escape to cancel")
                     Image(systemName: "return")
                         .font(.caption2.weight(.semibold))
@@ -1546,17 +1546,17 @@ struct LaneRow: View {
             }
             .buttonStyle(.plain)
             .focusable()
-            .focused($focus, equals: .laneAdd(lane.id))
+            .focused($focus, equals: .bandAdd(band.id))
             .focusEffectDisabled()
-            .foregroundStyle(hoveringAdd ? .primary : LanesTheme.secondaryText(colorScheme))
+            .foregroundStyle(hoveringAdd ? .primary : BandsTheme.secondaryText(colorScheme))
             .background {
-                if focus == .laneAdd(lane.id) && selection.target == .addThought(lane.id) && selection.showsKeyboardFocus {
-                    Circle().fill(LanesTheme.keyboardFocus(colorScheme).opacity(0.08)).padding(-3).allowsHitTesting(false)
+                if focus == .bandAdd(band.id) && selection.target == .addThought(band.id) && selection.showsKeyboardFocus {
+                    Circle().fill(BandsTheme.keyboardFocus(colorScheme).opacity(0.08)).padding(-3).allowsHitTesting(false)
                 }
             }
             .overlay {
-                if focus == .laneAdd(lane.id) && selection.target == .addThought(lane.id) && selection.showsKeyboardFocus {
-                    Circle().stroke(LanesTheme.keyboardFocus(colorScheme), lineWidth: 2).padding(-3).allowsHitTesting(false)
+                if focus == .bandAdd(band.id) && selection.target == .addThought(band.id) && selection.showsKeyboardFocus {
+                    Circle().stroke(BandsTheme.keyboardFocus(colorScheme), lineWidth: 2).padding(-3).allowsHitTesting(false)
                 }
             }
             .onKeyPress(.return) {
@@ -1566,7 +1566,7 @@ struct LaneRow: View {
             .onHover { hoveringAdd = $0 }
             .animation(.easeOut(duration: 0.14), value: hoveringAdd)
             .pointingHandCursor()
-            .accessibilityLabel("Add thought to \(lane.name)")
+            .accessibilityLabel("Add thought to \(band.name)")
         }
     }
     private func addThought() {
@@ -1576,20 +1576,20 @@ struct LaneRow: View {
         let order = InsertionPreferences.thoughtsAtEnd
             ? (orders.min() ?? 0) - 1
             : (orders.max() ?? 0) + 1
-        let thought = Thought(text: value, lane: lane, order: order)
+        let thought = Thought(text: value, band: band, order: order)
         context.insert(thought)
         try? context.save()
-        LanesNotificationBus.thoughtChanged(thought.id)
-        composingLaneID = nil
+        BandsNotificationBus.thoughtChanged(thought.id)
+        composingBandID = nil
         input = ""
         selection.select(.thought(thought.id), with: .keyboard)
         focus = .thought(thought.id)
     }
     private func handleDrop(raw: String, at location: CGPoint) -> Bool {
         guard let sourceID = UUID(uuidString: raw) else { return false }
-        if let source = lanes.first(where: { $0.id == sourceID }) {
-            guard source.id != lane.id else { return false }
-            onMoveLane(source, lane)
+        if let source = bands.first(where: { $0.id == sourceID }) {
+            guard source.id != band.id else { return false }
+            onMoveBand(source, band)
             return true
         }
         guard let allThoughts = try? context.fetch(FetchDescriptor<Thought>()),
@@ -1600,7 +1600,7 @@ struct LaneRow: View {
         if let sourceIndex = destinationThoughts.firstIndex(where: { $0.id == thought.id }), sourceIndex < destination {
             destination -= 1
         }
-        ThoughtManagement.reorder(thought, to: lane, among: destinationThoughts, at: destination, now: .now)
+        ThoughtManagement.reorder(thought, to: band, among: destinationThoughts, at: destination, now: .now)
         try? context.save()
         return true
     }
@@ -1615,17 +1615,17 @@ struct LaneRow: View {
     }
 }
 
-private struct LaneDragPreview: View {
+private struct BandDragPreview: View {
     @Environment(\.colorScheme) private var colorScheme
     let name: String
     var body: some View {
         Text(name)
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(LanesTheme.laneText(colorScheme))
+            .foregroundStyle(BandsTheme.bandText(colorScheme))
             .padding(.horizontal, 11)
             .padding(.vertical, 8)
-            .background(LanesTheme.laneFill(colorScheme), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(LanesTheme.outline(colorScheme)))
+            .background(BandsTheme.bandFill(colorScheme), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 9, style: .continuous).strokeBorder(BandsTheme.outline(colorScheme)))
             .opacity(0.34)
     }
 }
@@ -1647,8 +1647,8 @@ private struct ThoughtBubble<Content: View>: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
-            .background(fill ?? LanesTheme.chipFill(for: age, scheme: colorScheme), in: Capsule(style: .continuous))
-            .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.chipBorder(for: age, scheme: colorScheme), lineWidth: age == .fresh ? 0.7 : 0.9))
+            .background(fill ?? BandsTheme.chipFill(for: age, scheme: colorScheme), in: Capsule(style: .continuous))
+            .overlay(Capsule(style: .continuous).strokeBorder(BandsTheme.chipBorder(for: age, scheme: colorScheme), lineWidth: age == .fresh ? 0.7 : 0.9))
     }
 }
 
@@ -1658,7 +1658,7 @@ struct ThoughtChip: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var agingStore: ThoughtAgingSettingsStore
     @Bindable var thought: Thought
-    let laneID: UUID
+    let bandID: UUID
     let now: Date
     @Binding var selection: PanelSelection
     @FocusState.Binding var focus: RootView.PanelFocus?
@@ -1681,7 +1681,7 @@ struct ThoughtChip: View {
             .onChange(of: focus) { _, focus in
                 if focus == .thoughtEdit(thought.id), !editing { beginEdit() }
             }
-            .onReceive(NotificationCenter.default.publisher(for: .lanesBeginEdit)) { notification in
+            .onReceive(NotificationCenter.default.publisher(for: .bandsBeginEdit)) { notification in
                 guard let target = notification.object as? PanelSelection.Target,
                       target == .thought(thought.id) else { return }
                 beginEdit()
@@ -1702,7 +1702,7 @@ struct ThoughtChip: View {
             .background {
                 GeometryReader { proxy in
                     Color.clear.preference(key: ThoughtFramePreferenceKey.self,
-                                           value: [thought.id: proxy.frame(in: .named(laneID.uuidString))])
+                                           value: [thought.id: proxy.frame(in: .named(bandID.uuidString))])
                 }
             }
             .contextMenu {
@@ -1739,15 +1739,15 @@ struct ThoughtChip: View {
             .onKeyPress(.return) { beginEdit(); return .handled }
     }
     private var thoughtBubble: some View {
-        ThoughtBubble(age: age) { HStack(spacing: 6) { Text(thought.text).lineLimit(1).truncationMode(.tail).frame(maxWidth: 292, alignment: .leading); Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(LanesTheme.secondaryText(colorScheme)) } }
+        ThoughtBubble(age: age) { HStack(spacing: 6) { Text(thought.text).lineLimit(1).truncationMode(.tail).frame(maxWidth: 292, alignment: .leading); Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(BandsTheme.secondaryText(colorScheme)) } }
     }
     private var completionButton: some View {
         Button(action: complete) { Image(systemName: "checkmark").font(.caption.weight(.bold)) }.buttonStyle(.plain).foregroundStyle(.primary).frame(width: 18, height: 18).background(.regularMaterial, in: Circle()).overlay(Circle().strokeBorder(.primary.opacity(0.12))).pointingHandCursor().accessibilityLabel("Complete thought")
     }
     @ViewBuilder private var keyboardFocusOverlay: some View {
         if focus == .thought(thought.id) && selection.target == .thought(thought.id) && selection.showsKeyboardFocus {
-            Capsule(style: .continuous).fill(LanesTheme.keyboardFocus(colorScheme).opacity(0.08)).padding(-3).allowsHitTesting(false)
-            Capsule(style: .continuous).stroke(LanesTheme.keyboardFocus(colorScheme), lineWidth: 2).padding(-3).allowsHitTesting(false)
+            Capsule(style: .continuous).fill(BandsTheme.keyboardFocus(colorScheme).opacity(0.08)).padding(-3).allowsHitTesting(false)
+            Capsule(style: .continuous).stroke(BandsTheme.keyboardFocus(colorScheme), lineWidth: 2).padding(-3).allowsHitTesting(false)
         }
     }
     private var fullTextOverlay: some View {
@@ -1764,10 +1764,10 @@ struct ThoughtChip: View {
     private func complete() {
         selection.select(.thought(thought.id), with: .pointer)
         focus = .thought(thought.id)
-        LanesCommandDispatcher.perform(.complete)
+        BandsCommandDispatcher.perform(.complete)
     }
-    private func resetAging() { ThoughtManagement.resetAging(thought, now: .now); try? context.save(); LanesNotificationBus.thoughtChanged(thought.id) }
-    private func save() { guard ThoughtManagement.edit(thought, rawText: draft, now: .now) else { return }; try? context.save(); LanesNotificationBus.thoughtChanged(thought.id); editing = false; focus = .thought(thought.id) }
+    private func resetAging() { ThoughtManagement.resetAging(thought, now: .now); try? context.save(); BandsNotificationBus.thoughtChanged(thought.id) }
+    private func save() { guard ThoughtManagement.edit(thought, rawText: draft, now: .now) else { return }; try? context.save(); BandsNotificationBus.thoughtChanged(thought.id); editing = false; focus = .thought(thought.id) }
 }
 
 private struct ThoughtDragPreview: View {
@@ -1778,12 +1778,12 @@ private struct ThoughtDragPreview: View {
     var body: some View {
         HStack(spacing: 6) {
             Text(text).lineLimit(3).multilineTextAlignment(.leading)
-            Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(LanesTheme.secondaryText(colorScheme))
+            Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(BandsTheme.secondaryText(colorScheme))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
-        .background(LanesTheme.chipFill(for: age, scheme: colorScheme), in: Capsule(style: .continuous))
-        .overlay(Capsule(style: .continuous).strokeBorder(LanesTheme.chipBorder(for: age, scheme: colorScheme), lineWidth: 0.9))
+        .background(BandsTheme.chipFill(for: age, scheme: colorScheme), in: Capsule(style: .continuous))
+        .overlay(Capsule(style: .continuous).strokeBorder(BandsTheme.chipBorder(for: age, scheme: colorScheme), lineWidth: 0.9))
         .frame(maxWidth: 360, alignment: .leading)
         .opacity(0.34)
     }

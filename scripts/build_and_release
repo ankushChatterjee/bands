@@ -53,9 +53,9 @@ build_number=$(git rev-list --count HEAD)
 [ "$build_number" -gt 0 ] || build_number=1
 
 release_dir="$root_dir/.build/releases/$artifact_label"
-archive_path="$release_dir/lanes.xcarchive"
-app_path="$archive_path/Products/Applications/lanes.app"
-dmg_path="$release_dir/lanes-$artifact_label.dmg"
+archive_path="$release_dir/bands.xcarchive"
+app_path="$archive_path/Products/Applications/bands.app"
+dmg_path="$release_dir/bands-$artifact_label.dmg"
 staging_dir="$release_dir/dmg-root"
 
 mkdir -p "$release_dir"
@@ -65,8 +65,8 @@ rm -rf "$staging_dir"
 
 printf 'Building %s from branch %s at build %s...\n' "$release_tag" "$branch" "$build_number"
 xcodebuild \
-    -project "$root_dir/lanes.xcodeproj" \
-    -scheme lanes \
+    -project "$root_dir/bands.xcodeproj" \
+    -scheme bands \
     -configuration Release \
     -archivePath "$archive_path" \
     MARKETING_VERSION="$release_tag" \
@@ -74,12 +74,12 @@ xcodebuild \
     CODE_SIGNING_ALLOWED=NO \
     archive
 
-[ -d "$app_path" ] || { printf '%s\n' 'Archive did not contain lanes.app.' >&2; exit 1; }
+[ -d "$app_path" ] || { printf '%s\n' 'Archive did not contain bands.app.' >&2; exit 1; }
 
-swift build -c release --product lanes-mcp
-cp "$root_dir/.build/release/lanes-mcp" "$app_path/Contents/MacOS/lanes-mcp"
+swift build -c release --product bands-mcp
+cp "$root_dir/.build/release/bands-mcp" "$app_path/Contents/MacOS/bands-mcp"
 
-printf 'Self-signing lanes.app with %s...\n' "$signing_identity"
+printf 'Self-signing bands.app with %s...\n' "$signing_identity"
 codesign --force --deep --options runtime --timestamp=none --sign "$signing_identity" "$app_path"
 codesign --verify --deep --strict --verbose=2 "$app_path"
 
@@ -91,10 +91,10 @@ if [ -n "$notary_profile" ]; then
 fi
 
 mkdir -p "$staging_dir"
-ditto "$app_path" "$staging_dir/lanes.app"
+ditto "$app_path" "$staging_dir/bands.app"
 ln -s /Applications "$staging_dir/Applications"
 hdiutil create \
-    -volname "lanes $artifact_label" \
+    -volname "bands $artifact_label" \
     -srcfolder "$staging_dir" \
     -ov \
     -format UDZO \
@@ -111,7 +111,7 @@ if [ -n "$notary_profile" ]; then
     codesign --verify --strict --verbose=2 "$dmg_path"
 fi
 
-git tag -a "$tag" -m "Release lanes $release_tag"
+git tag -a "$tag" -m "Release bands $release_tag"
 
 printf '\nRelease complete.\n'
 printf 'Branch:   %s\n' "$branch"

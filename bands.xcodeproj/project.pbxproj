@@ -9,11 +9,11 @@
 		A10000010000000000000002 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000002 /* Models.swift */; };
 		A10000010000000000000003 /* PanelController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000003 /* PanelController.swift */; };
 		A10000010000000000000004 /* Views.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000004 /* Views.swift */; };
-		A10000010000000000000005 /* lanesApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000005 /* lanesApp.swift */; };
+		A10000010000000000000005 /* bandsApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000005 /* bandsApp.swift */; };
 		A10000010000000000000006 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000006 /* Assets.xcassets */; };
 		A10000010000000000000007 /* GlobalCaptureShortcut.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000008 /* GlobalCaptureShortcut.swift */; };
 		A10000010000000000000008 /* ThoughtAgingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000009 /* ThoughtAgingTests.swift */; };
-		A10000010000000000000009 /* LaneManagementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000A /* LaneManagementTests.swift */; };
+		A10000010000000000000009 /* BandManagementTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000A /* BandManagementTests.swift */; };
 		A1000001000000000000000A /* GlobalCaptureShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000B /* GlobalCaptureShortcutTests.swift */; };
 		A1000001000000000000000B /* MCPBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000D /* MCPBridge.swift */; };
 		A1000001000000000000000C /* Notifications.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000E /* Notifications.swift */; };
@@ -22,19 +22,19 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A20000010000000000000000 /* lanes.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = lanes.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000010000000000000000 /* bands.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = bands.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A20000010000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		A20000010000000000000002 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		A20000010000000000000003 /* PanelController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PanelController.swift; sourceTree = "<group>"; };
 		A20000010000000000000004 /* Views.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Views.swift; sourceTree = "<group>"; };
-		A20000010000000000000005 /* lanesApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = lanesApp.swift; sourceTree = "<group>"; };
+		A20000010000000000000005 /* bandsApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = bandsApp.swift; sourceTree = "<group>"; };
 		A20000010000000000000006 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A20000010000000000000007 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A20000010000000000000008 /* GlobalCaptureShortcut.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalCaptureShortcut.swift; sourceTree = "<group>"; };
 		A20000010000000000000009 /* ThoughtAgingTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThoughtAgingTests.swift; sourceTree = "<group>"; };
-		A2000001000000000000000A /* LaneManagementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaneManagementTests.swift; sourceTree = "<group>"; };
+		A2000001000000000000000A /* BandManagementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BandManagementTests.swift; sourceTree = "<group>"; };
 		A2000001000000000000000B /* GlobalCaptureShortcutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlobalCaptureShortcutTests.swift; sourceTree = "<group>"; };
-		A2000001000000000000000C /* lanesTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = lanesTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000001000000000000000C /* bandsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = bandsTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000001000000000000000D /* MCPBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MCPBridge.swift; sourceTree = "<group>"; };
 		A2000001000000000000000E /* Notifications.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Notifications.swift; sourceTree = "<group>"; };
 		A2000001000000000000000F /* SecureTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureTokenStore.swift; sourceTree = "<group>"; };
@@ -48,16 +48,16 @@
 
 /* Begin PBXGroup section */
 		A40000010000000000000000 = {isa = PBXGroup; children = (A40000010000000000000001, A40000010000000000000002, A40000010000000000000003, A40000010000000000000004,); sourceTree = "<group>"; };
-		A40000010000000000000001 /* Sources */ = {isa = PBXGroup; children = (A20000010000000000000001, A20000010000000000000002, A20000010000000000000003, A20000010000000000000004, A20000010000000000000005, A20000010000000000000008, A2000001000000000000000D, A2000001000000000000000E, A2000001000000000000000F, A20000010000000000000010,); path = Sources/lanes; sourceTree = "<group>"; };
+		A40000010000000000000001 /* Sources */ = {isa = PBXGroup; children = (A20000010000000000000001, A20000010000000000000002, A20000010000000000000003, A20000010000000000000004, A20000010000000000000005, A20000010000000000000008, A2000001000000000000000D, A2000001000000000000000E, A2000001000000000000000F, A20000010000000000000010,); path = Sources/bands; sourceTree = "<group>"; };
 		A40000010000000000000002 /* Supporting */ = {isa = PBXGroup; children = (A20000010000000000000006, A20000010000000000000007,); path = Supporting; sourceTree = "<group>"; };
 		A40000010000000000000003 /* Products */ = {isa = PBXGroup; children = (A20000010000000000000000,); name = Products; sourceTree = "<group>"; };
 		A40000010000000000000004 /* Tests */ = {isa = PBXGroup; children = (A40000010000000000000005,); path = Tests; sourceTree = "<group>"; };
-		A40000010000000000000005 /* lanesTests */ = {isa = PBXGroup; children = (A20000010000000000000009, A2000001000000000000000A, A2000001000000000000000B,); path = lanesTests; sourceTree = "<group>"; };
+		A40000010000000000000005 /* bandsTests */ = {isa = PBXGroup; children = (A20000010000000000000009, A2000001000000000000000A, A2000001000000000000000B,); path = bandsTests; sourceTree = "<group>"; };
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A50000010000000000000001 /* lanes */ = {isa = PBXNativeTarget; buildConfigurationList = A60000010000000000000001; buildPhases = (A30000010000000000000002, A30000010000000000000001, A30000010000000000000003,); buildRules = (); dependencies = (); name = lanes; productName = lanes; productReference = A20000010000000000000000; productType = "com.apple.product-type.application"; };
-		A50000010000000000000002 /* lanesTests */ = {isa = PBXNativeTarget; buildConfigurationList = A60000010000000000000002; buildPhases = (A30000010000000000000005, A30000010000000000000004,); buildRules = (); dependencies = (A90000010000000000000002,); name = lanesTests; productName = lanesTests; productReference = A2000001000000000000000C; productType = "com.apple.product-type.bundle.unit-test"; };
+		A50000010000000000000001 /* bands */ = {isa = PBXNativeTarget; buildConfigurationList = A60000010000000000000001; buildPhases = (A30000010000000000000002, A30000010000000000000001, A30000010000000000000003,); buildRules = (); dependencies = (); name = bands; productName = bands; productReference = A20000010000000000000000; productType = "com.apple.product-type.application"; };
+		A50000010000000000000002 /* bandsTests */ = {isa = PBXNativeTarget; buildConfigurationList = A60000010000000000000002; buildPhases = (A30000010000000000000005, A30000010000000000000004,); buildRules = (); dependencies = (A90000010000000000000002,); name = bandsTests; productName = bandsTests; productReference = A2000001000000000000000C; productType = "com.apple.product-type.bundle.unit-test"; };
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -74,12 +74,12 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin XCBuildConfiguration section */
-		A80000010000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CLANG_ENABLE_MODULES = YES; CODE_SIGN_IDENTITY = "Apple Development: ac.ankush15@gmail.com (J6G9D2S38S)"; CODE_SIGN_STYLE = Manual; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = 93Y7CT9U4X; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Supporting/Info.plist; MARKETING_VERSION = 0.1.0; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.lanes; PRODUCT_NAME = lanes; SWIFT_VERSION = 5.0;}; name = Debug; };
-		A80000010000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CLANG_ENABLE_MODULES = YES; CODE_SIGN_IDENTITY = "Apple Development: ac.ankush15@gmail.com (J6G9D2S38S)"; CODE_SIGN_STYLE = Manual; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = 93Y7CT9U4X; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Supporting/Info.plist; MARKETING_VERSION = 0.1.0; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.lanes; PRODUCT_NAME = lanes; SWIFT_VERSION = 5.0;}; name = Release; };
+		A80000010000000000000001 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CLANG_ENABLE_MODULES = YES; CODE_SIGN_IDENTITY = "Apple Development: ac.ankush15@gmail.com (J6G9D2S38S)"; CODE_SIGN_STYLE = Manual; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = 93Y7CT9U4X; ENABLE_TESTABILITY = YES; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Supporting/Info.plist; MARKETING_VERSION = 0.1.0; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.bands; PRODUCT_NAME = bands; SWIFT_VERSION = 5.0;}; name = Debug; };
+		A80000010000000000000002 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon; CLANG_ENABLE_MODULES = YES; CODE_SIGN_IDENTITY = "Apple Development: ac.ankush15@gmail.com (J6G9D2S38S)"; CODE_SIGN_STYLE = Manual; CURRENT_PROJECT_VERSION = 1; DEVELOPMENT_TEAM = 93Y7CT9U4X; GENERATE_INFOPLIST_FILE = NO; INFOPLIST_FILE = Supporting/Info.plist; MARKETING_VERSION = 0.1.0; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.bands; PRODUCT_NAME = bands; SWIFT_VERSION = 5.0;}; name = Release; };
 		A80000010000000000000003 /* Project Debug */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SWIFT_VERSION = 5.0;}; name = Debug; };
 		A80000010000000000000004 /* Project Release */ = {isa = XCBuildConfiguration; buildSettings = {CLANG_ENABLE_MODULES = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; SWIFT_VERSION = 5.0;}; name = Release; };
-		A80000010000000000000005 /* Tests Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.lanesTests; PRODUCT_NAME = lanesTests; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/lanes.app/Contents/MacOS/lanes";}; name = Debug; };
-		A80000010000000000000006 /* Tests Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.lanesTests; PRODUCT_NAME = lanesTests; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/lanes.app/Contents/MacOS/lanes";}; name = Release; };
+		A80000010000000000000005 /* Tests Debug */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.bandsTests; PRODUCT_NAME = bandsTests; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/bands.app/Contents/MacOS/bands";}; name = Debug; };
+		A80000010000000000000006 /* Tests Release */ = {isa = XCBuildConfiguration; buildSettings = {BUNDLE_LOADER = "$(TEST_HOST)"; CODE_SIGNING_ALLOWED = NO; GENERATE_INFOPLIST_FILE = YES; MACOSX_DEPLOYMENT_TARGET = 14.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.bandsTests; PRODUCT_NAME = bandsTests; SWIFT_VERSION = 5.0; TEST_HOST = "$(BUILT_PRODUCTS_DIR)/bands.app/Contents/MacOS/bands";}; name = Release; };
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -89,7 +89,7 @@
 /* End XCConfigurationList section */
 
 /* Begin PBXContainerItemProxy section */
-		A90000010000000000000001 = {isa = PBXContainerItemProxy; containerPortal = A70000010000000000000001; proxyType = 1; remoteGlobalIDString = A50000010000000000000001; remoteInfo = lanes; };
+		A90000010000000000000001 = {isa = PBXContainerItemProxy; containerPortal = A70000010000000000000001; proxyType = 1; remoteGlobalIDString = A50000010000000000000001; remoteInfo = bands; };
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXTargetDependency section */

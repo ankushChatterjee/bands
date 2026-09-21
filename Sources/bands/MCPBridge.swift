@@ -4,7 +4,7 @@ import Darwin
 
 /// The app-owned command surface used by the local MCP helper.
 @MainActor
-final class LanesCommandService {
+final class BandsCommandService {
     private let container: ModelContainer
 
     init(container: ModelContainer) { self.container = container }
@@ -13,60 +13,60 @@ final class LanesCommandService {
         let context = ModelContext(container)
         do {
             switch name {
-            case "lanes/list": return try list(context: context, arguments: arguments)
-            case "lanes/prioritized": return try prioritized(context: context, arguments: arguments)
-            case "lanes/search": return try search(context: context, arguments: arguments)
-            case "lanes/get": return try get(context: context, arguments: arguments)
-            case "lanes/capture": return try capture(context: context, arguments: arguments)
-            case "lanes/edit": return try edit(context: context, arguments: arguments)
-            case "lanes/move": return try move(context: context, arguments: arguments)
-            case "lanes/complete": return try mark(context: context, arguments: arguments, release: false)
-            case "lanes/release": return try mark(context: context, arguments: arguments, release: true)
+            case "bands/list": return try list(context: context, arguments: arguments)
+            case "bands/prioritized": return try prioritized(context: context, arguments: arguments)
+            case "bands/search": return try search(context: context, arguments: arguments)
+            case "bands/get": return try get(context: context, arguments: arguments)
+            case "bands/capture": return try capture(context: context, arguments: arguments)
+            case "bands/edit": return try edit(context: context, arguments: arguments)
+            case "bands/move": return try move(context: context, arguments: arguments)
+            case "bands/complete": return try mark(context: context, arguments: arguments, release: false)
+            case "bands/release": return try mark(context: context, arguments: arguments, release: true)
             default: throw BridgeError(message: "Unknown tool: \(name)")
             }
         } catch let error as BridgeError { return ["error": error.message] }
         catch { return ["error": error.localizedDescription] }
     }
 
-    private func lanes(_ context: ModelContext) throws -> [Lane] { try context.fetch(FetchDescriptor<Lane>()).sorted { $0.order < $1.order } }
+    private func bands(_ context: ModelContext) throws -> [Band] { try context.fetch(FetchDescriptor<Band>()).sorted { $0.order < $1.order } }
     private func thoughts(_ context: ModelContext) throws -> [Thought] { try context.fetch(FetchDescriptor<Thought>()).sorted { ($0.order ?? 0) > ($1.order ?? 0) } }
     private func id(_ arguments: [String: Any]) throws -> UUID {
         guard let value = arguments["id"] as? String, let result = UUID(uuidString: value) else { throw BridgeError(message: "A valid id is required") }
         return result
     }
-    private func lane(_ context: ModelContext, id: UUID) throws -> Lane {
-        guard let lane = try lanes(context).first(where: { $0.id == id }) else { throw BridgeError(message: "Lane not found") }
-        return lane
+    private func band(_ context: ModelContext, id: UUID) throws -> Band {
+        guard let band = try bands(context).first(where: { $0.id == id }) else { throw BridgeError(message: "Band not found") }
+        return band
     }
     private func thought(_ context: ModelContext, id: UUID) throws -> Thought {
         guard let thought = try thoughts(context).first(where: { $0.id == id }) else { throw BridgeError(message: "Thought not found") }
         return thought
     }
-    private func laneJSON(_ lane: Lane) -> [String: Any] {
+    private func bandJSON(_ band: Band) -> [String: Any] {
         [
-            "id": lane.id.uuidString,
-            "name": lane.name,
-            "description": lane.descriptionText as Any,
-            "order": lane.order,
-            "createdAt": ISO8601DateFormatter().string(from: lane.createdAt)
+            "id": band.id.uuidString,
+            "name": band.name,
+            "description": band.descriptionText as Any,
+            "order": band.order,
+            "createdAt": ISO8601DateFormatter().string(from: band.createdAt)
         ]
     }
     private func thoughtJSON(_ thought: Thought) -> [String: Any] {
         let age = ThoughtAging.age(for: thought)
         let ageMinutes = max(0, Int(Date.now.timeIntervalSince(thought.createdAt) / 60))
         var value: [String: Any] = ["id": thought.id.uuidString, "text": thought.text, "createdAt": ISO8601DateFormatter().string(from: thought.createdAt), "updatedAt": ISO8601DateFormatter().string(from: thought.updatedAt), "lastTouchedAt": ISO8601DateFormatter().string(from: thought.lastTouchedAt), "age": age.name, "ageMinutes": ageMinutes, "priority": age.priority.rawValue, "priorityRank": age.priority.rank]
-        value["laneId"] = thought.lane?.id.uuidString as Any
+        value["bandId"] = thought.band?.id.uuidString as Any
         value["completedAt"] = thought.completedAt.map { ISO8601DateFormatter().string(from: $0) } as Any
         value["releasedAt"] = thought.releasedAt.map { ISO8601DateFormatter().string(from: $0) } as Any
         return value
     }
     private func list(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] {
-        let allLanes = try lanes(context); let laneID = (arguments["laneId"] as? String).flatMap(UUID.init(uuidString:))
+        let allBands = try bands(context); let bandID = (arguments["bandId"] as? String).flatMap(UUID.init(uuidString:))
         let includeCompleted = arguments["includeCompleted"] as? Bool ?? false; let includeReleased = arguments["includeReleased"] as? Bool ?? false
         let result = try thoughts(context).filter { thought in
-            (laneID == nil || thought.lane?.id == laneID) && (includeCompleted || thought.completedAt == nil) && (includeReleased || thought.releasedAt == nil)
+            (bandID == nil || thought.band?.id == bandID) && (includeCompleted || thought.completedAt == nil) && (includeReleased || thought.releasedAt == nil)
         }
-        return ["lanes": allLanes.map(laneJSON), "thoughts": result.map(thoughtJSON)]
+        return ["bands": allBands.map(bandJSON), "thoughts": result.map(thoughtJSON)]
     }
     private func prioritized(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] {
         let minimumPriority = PriorityLevel(rawValue: arguments["minimumPriority"] as? String ?? "low") ?? .low
@@ -87,16 +87,16 @@ final class LanesCommandService {
     private func get(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] { ["thought": thoughtJSON(try thought(context, id: id(arguments)))] }
     private func capture(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] {
         guard let text = arguments["text"] as? String else { throw BridgeError(message: "text is required") }
-        let target = if let raw = arguments["laneId"] as? String, let laneID = UUID(uuidString: raw) { try lane(context, id: laneID) } else { try lanes(context).first }
-        guard let thought = try LaneManagement.capture(text, in: target, context: context, now: .now) else { throw BridgeError(message: "text cannot be empty") }
+        let target = if let raw = arguments["bandId"] as? String, let bandID = UUID(uuidString: raw) { try band(context, id: bandID) } else { try bands(context).first }
+        guard let thought = try BandManagement.capture(text, in: target, context: context, now: .now) else { throw BridgeError(message: "text cannot be empty") }
         return ["thought": thoughtJSON(thought)]
     }
     private func edit(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] {
         guard let text = arguments["text"] as? String else { throw BridgeError(message: "text is required") }; let item = try thought(context, id: id(arguments))
-        guard ThoughtManagement.edit(item, rawText: text, now: .now) else { throw BridgeError(message: "text cannot be empty") }; try context.save(); LanesNotificationBus.thoughtChanged(item.id); return ["thought": thoughtJSON(item)]
+        guard ThoughtManagement.edit(item, rawText: text, now: .now) else { throw BridgeError(message: "text cannot be empty") }; try context.save(); BandsNotificationBus.thoughtChanged(item.id); return ["thought": thoughtJSON(item)]
     }
-    private func move(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] { let item = try thought(context, id: id(arguments)); guard let raw = arguments["laneId"] as? String, let laneID = UUID(uuidString: raw) else { throw BridgeError(message: "laneId is required") }; guard ThoughtManagement.move(item, to: try lane(context, id: laneID), now: .now) else { throw BridgeError(message: "Thought is already in that lane") }; try context.save(); return ["thought": thoughtJSON(item)] }
-    private func mark(context: ModelContext, arguments: [String: Any], release: Bool) throws -> [String: Any] { let item = try thought(context, id: id(arguments)); if release { ThoughtManagement.letGo(item, now: .now) } else { ThoughtManagement.complete(item, now: .now) }; try context.save(); LanesNotificationBus.thoughtChanged(item.id); return ["thought": thoughtJSON(item)] }
+    private func move(context: ModelContext, arguments: [String: Any]) throws -> [String: Any] { let item = try thought(context, id: id(arguments)); guard let raw = arguments["bandId"] as? String, let bandID = UUID(uuidString: raw) else { throw BridgeError(message: "bandId is required") }; guard ThoughtManagement.move(item, to: try band(context, id: bandID), now: .now) else { throw BridgeError(message: "Thought is already in that band") }; try context.save(); return ["thought": thoughtJSON(item)] }
+    private func mark(context: ModelContext, arguments: [String: Any], release: Bool) throws -> [String: Any] { let item = try thought(context, id: id(arguments)); if release { ThoughtManagement.letGo(item, now: .now) } else { ThoughtManagement.complete(item, now: .now) }; try context.save(); BandsNotificationBus.thoughtChanged(item.id); return ["thought": thoughtJSON(item)] }
 }
 
 private enum PriorityLevel: String {
@@ -136,17 +136,17 @@ private struct BridgeError: Error { let message: String }
 private final class UnsafeArguments: @unchecked Sendable { let value: [String: Any]; init(_ value: [String: Any]) { self.value = value } }
 
 /// A deliberately local, line-oriented JSON-RPC endpoint. The helper discovers the path from `socketPath`.
-final class LanesMCPBridge: @unchecked Sendable {
+final class BandsMCPBridge: @unchecked Sendable {
     let socketPath: String
-    private let service: LanesCommandService
+    private let service: BandsCommandService
     private var fd: Int32 = -1
     private var source: DispatchSourceRead?
     private var clients: [Int32: DispatchSourceRead] = [:]
     private var buffers: [Int32: Data] = [:]
 
-    init(service: LanesCommandService, socketPath: String? = nil) {
+    init(service: BandsCommandService, socketPath: String? = nil) {
         self.service = service
-        self.socketPath = socketPath ?? (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("lanes/mcp.sock").path)
+        self.socketPath = socketPath ?? (FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!.appendingPathComponent("bands/mcp.sock").path)
     }
     func start() {
         guard fd < 0 else { return }; try? FileManager.default.createDirectory(at: URL(fileURLWithPath: socketPath).deletingLastPathComponent(), withIntermediateDirectories: true); unlink(socketPath)
@@ -163,10 +163,10 @@ final class LanesMCPBridge: @unchecked Sendable {
         let id = object["id"] ?? NSNull(); let method = object["method"] as? String ?? ""
         guard UserDefaults.standard.bool(forKey: "mcpEnabled") else { send(["jsonrpc": "2.0", "id": id, "error": ["code": -32001, "message": "MCP is disabled"]], client: client); return }
         if method == "tools/list" { send(["jsonrpc": "2.0", "id": id, "result": ["tools": Self.toolDefinitions()]], client: client); return }
-        guard method == "tools/call" || method == "lanes.command", let params = object["params"] as? [String: Any] else { send(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "Unknown method"]], client: client); return }
+        guard method == "tools/call" || method == "bands.command", let params = object["params"] as? [String: Any] else { send(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "Unknown method"]], client: client); return }
         let rawName = (params["name"] as? String) ?? (params["command"] as? String) ?? ""
-        let aliases = ["list_lanes": "lanes/list", "list_thoughts": "lanes/list", "list_prioritized_thoughts": "lanes/prioritized", "search": "lanes/search", "get": "lanes/get", "capture": "lanes/capture", "update_thought": "lanes/edit", "complete_thought": "lanes/complete", "release_thought": "lanes/release", "move_thought": "lanes/move"]
-        guard let name = aliases[rawName] ?? (rawName.hasPrefix("lanes/") ? rawName : nil) else { send(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "Unknown command"]], client: client); return }
+        let aliases = ["list_bands": "bands/list", "list_thoughts": "bands/list", "list_prioritized_thoughts": "bands/prioritized", "search": "bands/search", "get": "bands/get", "capture": "bands/capture", "update_thought": "bands/edit", "complete_thought": "bands/complete", "release_thought": "bands/release", "move_thought": "bands/move"]
+        guard let name = aliases[rawName] ?? (rawName.hasPrefix("bands/") ? rawName : nil) else { send(["jsonrpc": "2.0", "id": id, "error": ["code": -32601, "message": "Unknown command"]], client: client); return }
         var arguments = (params["arguments"] as? [String: Any]) ?? (params["args"] as? [String: Any]) ?? params
         if arguments["id"] == nil, let thoughtID = arguments["thoughtId"] { arguments["id"] = thoughtID }
         let boxedArguments = UnsafeArguments(arguments)
@@ -182,7 +182,7 @@ final class LanesMCPBridge: @unchecked Sendable {
     }
     private func send(_ response: [String: Any], client: Int32) { if let out = try? JSONSerialization.data(withJSONObject: response) { var line = out; line.append(10); _ = line.withUnsafeBytes { Darwin.write(client, $0.baseAddress, line.count) } } }
     static func toolDefinitions() -> [[String: Any]] { [
-        ("list_lanes", "List lanes"), ("list_thoughts", "List thoughts"), ("list_prioritized_thoughts", "List active thoughts ordered by their age-derived priority"), ("search", "Search thoughts"), ("get", "Get a thought"),
+        ("list_bands", "List bands"), ("list_thoughts", "List thoughts"), ("list_prioritized_thoughts", "List active thoughts ordered by their age-derived priority"), ("search", "Search thoughts"), ("get", "Get a thought"),
         ("capture", "Capture a thought"), ("update_thought", "Edit a thought"), ("move_thought", "Move a thought"),
         ("complete_thought", "Complete a thought"), ("release_thought", "Release a thought")
     ].map { ["name": $0.0, "description": $0.1] } }

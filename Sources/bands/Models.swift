@@ -2,11 +2,11 @@ import Foundation
 import Combine
 import SwiftData
 
-@Model final class Lane {
+@Model final class Band {
     var id: UUID
     var name: String
     // Optional keeps existing SwiftData stores migratable while allowing new
-    // lanes to provide semantic context for automatic categorization.
+    // bands to provide semantic context for automatic categorization.
     var descriptionText: String?
     var order: Int
     var createdAt: Date
@@ -30,10 +30,10 @@ import SwiftData
     var agingResetAt: Date?
     var completedAt: Date?
     var releasedAt: Date?
-    var lane: Lane?
+    var band: Band?
 
-    init(id: UUID = UUID(), text: String, lane: Lane? = nil, order: Int? = nil, createdAt: Date = .now) {
-        self.id = id; self.text = text; self.order = order; self.lane = lane; self.createdAt = createdAt
+    init(id: UUID = UUID(), text: String, band: Band? = nil, order: Int? = nil, createdAt: Date = .now) {
+        self.id = id; self.text = text; self.order = order; self.band = band; self.createdAt = createdAt
         self.updatedAt = createdAt; self.lastTouchedAt = createdAt; self.agingResetAt = nil
     }
 }
@@ -56,10 +56,10 @@ struct ThoughtAgingSettings: Equatable {
 /// follow the same preference.
 enum InsertionPreferences {
     static let thoughtsAtEndKey = "insertion.thoughtsAtEnd"
-    static let lanesAtEndKey = "insertion.lanesAtEnd"
+    static let bandsAtEndKey = "insertion.bandsAtEnd"
 
     static var thoughtsAtEnd: Bool { UserDefaults.standard.bool(forKey: thoughtsAtEndKey) }
-    static var lanesAtEnd: Bool { UserDefaults.standard.bool(forKey: lanesAtEndKey) }
+    static var bandsAtEnd: Bool { UserDefaults.standard.bool(forKey: bandsAtEndKey) }
 }
 
 @MainActor
@@ -93,13 +93,13 @@ final class ThoughtAgingSettingsStore: ObservableObject {
         defaults.set(newSettings.warmMinutes, forKey: "aging.warmMinutes")
         defaults.set(newSettings.attentionMinutes, forKey: "aging.attentionMinutes")
         defaults.set(newSettings.oldMinutes, forKey: "aging.oldMinutes")
-        NotificationCenter.default.post(name: .lanesAgingSettingsChanged, object: nil)
+        NotificationCenter.default.post(name: .bandsAgingSettingsChanged, object: nil)
     }
 
     func restoreDefaults() { update(.defaults) }
 }
 
-enum LaneNameValidation: Equatable {
+enum BandNameValidation: Equatable {
     case valid(String)
     case empty
     case duplicate
@@ -109,53 +109,53 @@ enum PanelMoveDirection { case up, down }
 
 enum BoardDirection { case left, right, up, down }
 
-struct BoardLane: Equatable {
+struct BoardBand: Equatable {
     let id: UUID
     let thoughts: [UUID]
-    /// Whether the lane renders its + control after the thought bubbles.
+    /// Whether the band renders its + control after the thought bubbles.
     var thoughtsAtEnd: Bool = false
 }
 
 enum BoardNavigation {
-    static func target(from target: PanelSelection.Target?, direction: BoardDirection, lanes: [BoardLane]) -> PanelSelection.Target? {
-        guard let first = lanes.first else { return nil }
-        guard let row = lanes.firstIndex(where: { lane in
-            target == .lane(lane.id) || target == .addThought(lane.id) || lane.thoughts.contains(where: { target == .thought($0) })
-        }) else { return .lane(first.id) }
-        let lane = lanes[row]
-        let column = lane.thoughts.firstIndex(where: { target == .thought($0) })
-        let isAddThought = target == .addThought(lane.id)
+    static func target(from target: PanelSelection.Target?, direction: BoardDirection, bands: [BoardBand]) -> PanelSelection.Target? {
+        guard let first = bands.first else { return nil }
+        guard let row = bands.firstIndex(where: { band in
+            target == .band(band.id) || target == .addThought(band.id) || band.thoughts.contains(where: { target == .thought($0) })
+        }) else { return .band(first.id) }
+        let band = bands[row]
+        let column = band.thoughts.firstIndex(where: { target == .thought($0) })
+        let isAddThought = target == .addThought(band.id)
         switch direction {
         case .left:
             if isAddThought {
-                return lane.thoughtsAtEnd ? (lane.thoughts.last.map(PanelSelection.Target.thought) ?? .lane(lane.id)) : .lane(lane.id)
+                return band.thoughtsAtEnd ? (band.thoughts.last.map(PanelSelection.Target.thought) ?? .band(band.id)) : .band(band.id)
             }
-            guard let column else { return .lane(lane.id) }
-            if column > 0 { return .thought(lane.thoughts[column - 1]) }
-            return lane.thoughtsAtEnd ? .lane(lane.id) : .addThought(lane.id)
+            guard let column else { return .band(band.id) }
+            if column > 0 { return .thought(band.thoughts[column - 1]) }
+            return band.thoughtsAtEnd ? .band(band.id) : .addThought(band.id)
         case .right:
             if isAddThought {
-                return lane.thoughts.first.map(PanelSelection.Target.thought) ?? target
+                return band.thoughts.first.map(PanelSelection.Target.thought) ?? target
             }
-            guard !lane.thoughts.isEmpty else { return .addThought(lane.id) }
-            guard let column else { return lane.thoughtsAtEnd ? .thought(lane.thoughts[0]) : .addThought(lane.id) }
-            if column < lane.thoughts.count - 1 { return .thought(lane.thoughts[column + 1]) }
-            return lane.thoughtsAtEnd ? .addThought(lane.id) : .thought(lane.thoughts[column])
+            guard !band.thoughts.isEmpty else { return .addThought(band.id) }
+            guard let column else { return band.thoughtsAtEnd ? .thought(band.thoughts[0]) : .addThought(band.id) }
+            if column < band.thoughts.count - 1 { return .thought(band.thoughts[column + 1]) }
+            return band.thoughtsAtEnd ? .addThought(band.id) : .thought(band.thoughts[column])
         case .up, .down:
-            let nextRow = max(0, min(lanes.count - 1, row + (direction == .up ? -1 : 1)))
+            let nextRow = max(0, min(bands.count - 1, row + (direction == .up ? -1 : 1)))
             guard nextRow != row else { return target }
-            let next = lanes[nextRow]
+            let next = bands[nextRow]
             if isAddThought { return .addThought(next.id) }
-            guard let column else { return .lane(next.id) }
+            guard let column else { return .band(next.id) }
             guard !next.thoughts.isEmpty else { return .addThought(next.id) }
             return .thought(next.thoughts[min(column, next.thoughts.count - 1)])
         }
     }
 
-    static func afterRemoving(_ id: UUID, from lane: BoardLane) -> PanelSelection.Target {
-        guard let index = lane.thoughts.firstIndex(of: id) else { return .lane(lane.id) }
-        let remaining = lane.thoughts.filter { $0 != id }
-        return remaining.isEmpty ? .lane(lane.id) : .thought(remaining[min(index, remaining.count - 1)])
+    static func afterRemoving(_ id: UUID, from band: BoardBand) -> PanelSelection.Target {
+        guard let index = band.thoughts.firstIndex(of: id) else { return .band(band.id) }
+        let remaining = band.thoughts.filter { $0 != id }
+        return remaining.isEmpty ? .band(band.id) : .thought(remaining[min(index, remaining.count - 1)])
     }
 }
 
@@ -163,7 +163,7 @@ enum BoardNavigation {
 /// lets keyboard users receive a visible focus treatment without making a
 /// pointer click look selected.
 struct PanelSelection: Equatable {
-    enum Target: Hashable { case lane(UUID), thought(UUID), addThought(UUID) }
+    enum Target: Hashable { case band(UUID), thought(UUID), addThought(UUID) }
     enum InputModality { case keyboard, pointer }
 
     var target: Target?
@@ -174,9 +174,9 @@ struct PanelSelection: Equatable {
         return id
     }
 
-    var laneID: UUID? {
+    var bandID: UUID? {
         switch target {
-        case .lane(let id), .addThought(let id): return id
+        case .band(let id), .addThought(let id): return id
         default: return nil
         }
     }
@@ -196,7 +196,7 @@ struct PanelSelection: Equatable {
 }
 
 enum PanelCommand: String, CaseIterable {
-    case quickCapture, newThought, newLane, openSettings
+    case quickCapture, newThought, newBand, openSettings
     case copy, editDescription
     case complete, edit, resetAging, move, moveEarlier, moveLater, destructive
 
@@ -204,7 +204,7 @@ enum PanelCommand: String, CaseIterable {
         switch self {
         case .quickCapture: "Quick Capture"
         case .newThought: "New Thought"
-        case .newLane: "New Lane"
+        case .newBand: "New Band"
         case .openSettings: "Settings…"
         case .copy: "Copy Thought"
         case .editDescription: "Edit Description"
@@ -222,7 +222,7 @@ enum PanelCommand: String, CaseIterable {
         switch self {
         case .quickCapture: "⌥Q"
         case .newThought: "⌘N"
-        case .newLane: "⇧⌘N"
+        case .newBand: "⇧⌘N"
         case .openSettings: "⌘,"
         case .copy: "⌘C"
         case .editDescription: "⇧⌘D"
@@ -236,19 +236,19 @@ enum PanelCommand: String, CaseIterable {
         }
     }
 
-    static let reference: [PanelCommand] = [.quickCapture, .newThought, .newLane, .copy, .editDescription, .complete, .edit, .resetAging, .move, .moveEarlier, .moveLater, .destructive, .openSettings]
+    static let reference: [PanelCommand] = [.quickCapture, .newThought, .newBand, .copy, .editDescription, .complete, .edit, .resetAging, .move, .moveEarlier, .moveLater, .destructive, .openSettings]
 }
 
-enum LanesCommandDispatcher {
-    static let notification = Notification.Name("lanes.panelCommand")
+enum BandsCommandDispatcher {
+    static let notification = Notification.Name("bands.panelCommand")
 
     static func perform(_ command: PanelCommand) {
         NotificationCenter.default.post(name: notification, object: command)
     }
 }
 
-enum LaneManagement {
-    static func validateName(_ rawName: String, existingNames: [String], excluding excludedName: String? = nil) -> LaneNameValidation {
+enum BandManagement {
+    static func validateName(_ rawName: String, existingNames: [String], excluding excludedName: String? = nil) -> BandNameValidation {
         let name = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !name.isEmpty else { return .empty }
         let normalized = name.folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
@@ -260,46 +260,46 @@ enum LaneManagement {
         return duplicate ? .duplicate : .valid(name)
     }
 
-    static func reordered(_ lanes: [Lane], moving source: IndexSet, to destination: Int) -> [Lane] {
-        var result = lanes
+    static func reordered(_ bands: [Band], moving source: IndexSet, to destination: Int) -> [Band] {
+        var result = bands
         result.move(fromOffsets: source, toOffset: destination)
-        for (index, lane) in result.enumerated() { lane.order = index }
+        for (index, band) in result.enumerated() { band.order = index }
         return result
     }
 
-    static func prepend(_ lane: Lane, to lanes: [Lane]) {
-        lanes.forEach { $0.order += 1 }
-        lane.order = 0
+    static func prepend(_ band: Band, to bands: [Band]) {
+        bands.forEach { $0.order += 1 }
+        band.order = 0
     }
 
-    static func insert(_ lane: Lane, into lanes: [Lane], atEnd: Bool) {
+    static func insert(_ band: Band, into bands: [Band], atEnd: Bool) {
         guard atEnd else {
-            prepend(lane, to: lanes)
+            prepend(band, to: bands)
             return
         }
-        lane.order = (lanes.map(\.order).max() ?? -1) + 1
+        band.order = (bands.map(\.order).max() ?? -1) + 1
     }
 
-    static func capture(_ rawText: String, in lane: Lane?, context: ModelContext, now: Date) throws -> Thought? {
+    static func capture(_ rawText: String, in band: Band?, context: ModelContext, now: Date) throws -> Thought? {
         let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return nil }
         let existing = try context.fetch(FetchDescriptor<Thought>())
-            .filter { $0.lane?.id == lane?.id && $0.completedAt == nil && $0.releasedAt == nil }
+            .filter { $0.band?.id == band?.id && $0.completedAt == nil && $0.releasedAt == nil }
         let orders = existing.compactMap(\.order)
         let order = InsertionPreferences.thoughtsAtEnd
             ? (orders.min() ?? 0) - 1
             : (orders.max() ?? 0) + 1
-        let thought = Thought(text: text, lane: lane, order: order, createdAt: now)
+        let thought = Thought(text: text, band: band, order: order, createdAt: now)
         context.insert(thought)
         try context.save()
-        LanesNotificationBus.thoughtChanged(thought.id)
+        BandsNotificationBus.thoughtChanged(thought.id)
         return thought
     }
 
-    static func validateDropPayload(_ rawPayload: String, onto lane: Lane, thoughts: [Thought]) -> Thought? {
+    static func validateDropPayload(_ rawPayload: String, onto band: Band, thoughts: [Thought]) -> Thought? {
         guard let id = UUID(uuidString: rawPayload),
               let thought = thoughts.first(where: { $0.id == id }),
-              thought.lane?.id != lane.id,
+              thought.band?.id != band.id,
               thought.completedAt == nil,
               thought.releasedAt == nil else { return nil }
         return thought
@@ -321,29 +321,29 @@ enum ThoughtManagement {
         thought.lastTouchedAt = now
     }
 
-    static func move(_ thought: Thought, to lane: Lane, now: Date) -> Bool {
-        guard thought.lane?.id != lane.id else { return false }
-        thought.lane = lane
+    static func move(_ thought: Thought, to band: Band, now: Date) -> Bool {
+        guard thought.band?.id != band.id else { return false }
+        thought.band = band
         thought.lastTouchedAt = now
         return true
     }
 
-    static func reorder(_ thought: Thought, to lane: Lane, among thoughts: [Thought], at index: Int, now: Date) {
+    static func reorder(_ thought: Thought, to band: Band, among thoughts: [Thought], at index: Int, now: Date) {
         var ordered = thoughts.filter { $0.id != thought.id && $0.completedAt == nil && $0.releasedAt == nil }
         let destination = max(0, min(index, ordered.count))
         ordered.insert(thought, at: destination)
         for (index, item) in ordered.enumerated() {
             item.order = ordered.count - index
         }
-        thought.lane = lane
+        thought.band = band
         thought.lastTouchedAt = now
     }
 
-    static func moveWithinLane(_ thought: Thought, among thoughts: [Thought], direction: PanelMoveDirection, now: Date) -> Bool {
+    static func moveWithinBand(_ thought: Thought, among thoughts: [Thought], direction: PanelMoveDirection, now: Date) -> Bool {
         guard let current = thoughts.firstIndex(where: { $0.id == thought.id }) else { return false }
         let destination = direction == .up ? current - 1 : current + 1
         guard thoughts.indices.contains(destination) else { return false }
-        reorder(thought, to: thought.lane!, among: thoughts, at: destination, now: now)
+        reorder(thought, to: thought.band!, among: thoughts, at: destination, now: now)
         return true
     }
 

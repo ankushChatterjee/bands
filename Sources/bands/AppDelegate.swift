@@ -1,7 +1,7 @@
 import AppKit
 import SwiftData
 
-private enum LanesStatusIcon {
+private enum BandsStatusIcon {
     static func make() -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         image.lockFocus()
@@ -13,7 +13,7 @@ private enum LanesStatusIcon {
         NSColor.black.setStroke()
 
         // The outer rails are continuous; the center rail is dashed to suggest
-        // lanes and movement between them.
+        // bands and movement between them.
         for y in [5.0, 13.0] {
             path.move(to: NSPoint(x: 2, y: y))
             path.line(to: NSPoint(x: 16, y: y))
@@ -33,10 +33,10 @@ private enum LanesStatusIcon {
     }
 }
 
-private enum LanesStatusMenu {
+private enum BandsStatusMenu {
     static func make(target: AnyObject) -> NSMenu {
         let menu = NSMenu()
-        menu.addItem(withTitle: "Quit lanes", action: #selector(AppDelegate.quit), keyEquivalent: "q")
+        menu.addItem(withTitle: "Quit bands", action: #selector(AppDelegate.quit), keyEquivalent: "q")
         menu.items[0].target = target
         return menu
     }
@@ -49,29 +49,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var globalPanelShortcut: GlobalCaptureShortcutController!
     private var globalCaptureShortcut: GlobalCaptureShortcutController!
     private var container: ModelContainer!
-    private var mcpBridge: LanesMCPBridge!
-    private var notificationCoordinator: LanesNotificationCoordinator!
+    private var mcpBridge: BandsMCPBridge!
+    private var notificationCoordinator: BandsNotificationCoordinator!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
-        do { container = try ModelContainer(for: Lane.self, Thought.self) }
+        do { container = try ModelContainer(for: Band.self, Thought.self) }
         catch { fatalError("Unable to create local store: \(error)") }
         let defaults = UserDefaults.standard
         if defaults.object(forKey: "mcpEnabled") == nil { defaults.set(true, forKey: "mcpEnabled") }
         if defaults.bool(forKey: "mcpEnabled") {
-            mcpBridge = LanesMCPBridge(service: LanesCommandService(container: container))
+            mcpBridge = BandsMCPBridge(service: BandsCommandService(container: container))
             mcpBridge.start()
         }
         controller = PanelController(container: container)
-        notificationCoordinator = LanesNotificationCoordinator(container: container)
+        notificationCoordinator = BandsNotificationCoordinator(container: container)
         notificationCoordinator.start()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             // Use AppKit's native, subtle selected-state background while the
             // panel is open. The controller owns the highlighted state.
             (button.cell as? NSButtonCell)?.highlightsBy = NSCell.StyleMask(rawValue: 8)
-            button.image = LanesStatusIcon.make()
-            button.toolTip = "lanes"
+            button.image = BandsStatusIcon.make()
+            button.toolTip = "bands"
             button.target = self
             button.action = #selector(statusItemClicked)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -83,20 +83,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         globalCaptureShortcut = GlobalCaptureShortcutController(shortcut: .optionQ) { [weak self] in
             self?.controller.show()
             DispatchQueue.main.async {
-                LanesCommandDispatcher.perform(.quickCapture)
+                BandsCommandDispatcher.perform(.quickCapture)
             }
         }
         let panelShortcutRegistered = globalPanelShortcut.register()
         let captureShortcutRegistered = globalCaptureShortcut.register()
         if !panelShortcutRegistered || !captureShortcutRegistered {
-            NSLog("lanes global shortcuts: Option-L registered=\(panelShortcutRegistered), Option-Q registered=\(captureShortcutRegistered)")
+            NSLog("bands global shortcuts: Option-L registered=\(panelShortcutRegistered), Option-Q registered=\(captureShortcutRegistered)")
         }
     }
 
     @objc private func statusItemClicked() {
         guard let button = statusItem.button else { return }
         if NSApp.currentEvent?.type == .rightMouseUp {
-            LanesStatusMenu.make(target: self).popUp(positioning: nil,
+            BandsStatusMenu.make(target: self).popUp(positioning: nil,
                                                       at: NSPoint(x: button.bounds.midX, y: button.bounds.minY),
                                                       in: button)
         } else {

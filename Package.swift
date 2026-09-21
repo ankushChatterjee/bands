@@ -2,15 +2,15 @@
 import PackageDescription
 
 let package = Package(
-    name: "lanes",
+    name: "bands",
     platforms: [.macOS(.v14)],
     products: [
-        .executable(name: "lanes", targets: ["lanes"]),
-        .executable(name: "lanes-mcp", targets: ["lanes-mcp"])
+        .executable(name: "bands", targets: ["bands"]),
+        .executable(name: "bands-mcp", targets: ["bands-mcp"])
     ],
     targets: [
-        .executableTarget(name: "lanes", path: "Sources/lanes"),
-        .executableTarget(name: "lanes-mcp", path: "Sources/lanes-mcp"),
-        .testTarget(name: "lanesTests", dependencies: ["lanes"], path: "Tests/lanesTests")
+        .executableTarget(name: "bands", path: "Sources/bands"),
+        .executableTarget(name: "bands-mcp", path: "Sources/bands-mcp"),
+        .testTarget(name: "bandsTests", dependencies: ["bands"], path: "Tests/bandsTests")
     ]
 )

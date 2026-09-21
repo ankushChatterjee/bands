@@ -5,7 +5,7 @@ extension PanelCommand {
     var key: KeyEquivalent {
         switch self {
         case .quickCapture: "q"
-        case .newThought, .newLane: "n"
+        case .newThought, .newBand: "n"
         case .openSettings: ","
         case .copy: "c"
         case .editDescription: "d"
@@ -21,7 +21,7 @@ extension PanelCommand {
         switch self {
         case .quickCapture: [.option]
         case .edit: []
-        case .newLane: [.command, .shift]
+        case .newBand: [.command, .shift]
         case .copy: [.command]
         case .resetAging, .move, .moveEarlier, .moveLater: [.command, .option]
         case .editDescription: [.command, .shift]
@@ -48,29 +48,29 @@ extension PanelCommand {
     @Published var available: Set<PanelCommand> = []
 }
 
-struct LanesCommands: Commands {
+struct BandsCommands: Commands {
     @ObservedObject private var state = BoardCommands.shared
     var body: some Commands {
         CommandGroup(replacing: .appSettings) {
             commandButton(.openSettings)
         }
-        CommandMenu("lanes") {
+        CommandMenu("bands") {
             ForEach(PanelCommand.reference.filter { $0 != .quickCapture && $0 != .openSettings }, id: \.self) { command in
                 commandButton(command)
             }
         }
     }
     private func commandButton(_ command: PanelCommand) -> some View {
-        Button(command.title) { LanesCommandDispatcher.perform(command) }
+        Button(command.title) { BandsCommandDispatcher.perform(command) }
             .keyboardShortcut(command.key, modifiers: command.modifiers)
             .disabled(!state.available.contains(command))
     }
 }
 
-@main struct lanesApp: App {
+@main struct bandsApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var delegate
     var body: some Scene {
         Settings { SettingsView().environmentObject(ThoughtAgingSettingsStore.shared) }
-            .commands { LanesCommands() }
+            .commands { BandsCommands() }
     }
 }

@@ -1,6 +1,6 @@
 import XCTest
 import Carbon.HIToolbox
-@testable import lanes
+@testable import bands
 
 @MainActor
 final class GlobalCaptureShortcutTests: XCTestCase {

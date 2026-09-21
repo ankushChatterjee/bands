@@ -8,8 +8,8 @@ enum SecureTokenKeys {
 /// Stores user-supplied secrets in the macOS Keychain.
 ///
 /// Tokens are generic-password items grouped under one versioned service and
-/// addressed by their caller-provided key, for example `lanes:jev_key`.
-/// A macOS Keychain access list trusts the signed Lanes app, so its normal
+/// addressed by their caller-provided key, for example `bands:jev_key`.
+/// A macOS Keychain access list trusts the signed Bands app, so its normal
 /// reads do not prompt for the user's Mac password or Touch ID. The service
 /// version prevents items created by an older build with a user-presence ACL
 /// from being reused.
@@ -28,7 +28,7 @@ final class SecureTokenStore: @unchecked Sendable {
     // v4 starts clean after v3 was created by an app bundle whose signature was
     // modified during the build script. Never touch that legacy record: doing
     // so would re-trigger its old Keychain authorization dialog.
-    init(service: String = "com.example.lanes.secure-tokens.v4") {
+    init(service: String = "com.example.bands.secure-tokens.v4") {
         self.service = service
     }
 
@@ -41,7 +41,7 @@ final class SecureTokenStore: @unchecked Sendable {
         let query = itemQuery(forKey: key)
         let attributes: [String: Any] = [
             kSecValueData as String: Data(token.utf8),
-            kSecAttrAccess as String: try trustedLanesAccess()
+            kSecAttrAccess as String: try trustedBandsAccess()
         ]
 
         let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
@@ -55,7 +55,7 @@ final class SecureTokenStore: @unchecked Sendable {
 
         var item = query
         item[kSecValueData as String] = Data(token.utf8)
-        item[kSecAttrAccess as String] = try trustedLanesAccess()
+        item[kSecAttrAccess as String] = try trustedBandsAccess()
 
         let addStatus = SecItemAdd(item as CFDictionary, nil)
         guard addStatus == errSecSuccess else {
@@ -130,9 +130,9 @@ final class SecureTokenStore: @unchecked Sendable {
     }
 
     /// macOS Keychain ACLs can explicitly trust a signed application. This
-    /// gives Lanes silent access to its own token while denying other apps,
+    /// gives Bands silent access to its own token while denying other apps,
     /// rather than relying on an "Allow" choice at every read.
-    private func trustedLanesAccess() throws -> SecAccess {
+    private func trustedBandsAccess() throws -> SecAccess {
         guard let executablePath = Bundle.main.executablePath else {
             throw SecureTokenStoreError.unavailableExecutablePath
         }
@@ -147,7 +147,7 @@ final class SecureTokenStore: @unchecked Sendable {
 
         var access: SecAccess?
         let accessStatus = SecAccessCreate(
-            "lanes Jev token" as CFString,
+            "bands Jev token" as CFString,
             [trustedApplication] as CFArray,
             &access
         )
