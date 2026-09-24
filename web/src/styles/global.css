@@ -14,6 +14,8 @@
 }
 
 * { box-sizing: border-box; }
+::selection { background: rgb(190 139 103 / 28%); color: #f7f3ea; }
+::-moz-selection { background: rgb(190 139 103 / 28%); color: #f7f3ea; }
 html { scroll-behavior: smooth; }
 body { margin: 0; min-width: 320px; overflow-x: clip; position: relative; }
 body::before {
@@ -24,7 +26,7 @@ body::before {
   pointer-events: none;
   background: url("/images/ribbed-glass.png") center 38% / cover no-repeat;
   opacity: .16;
-  filter: blur(34px) saturate(.7);
+  filter: blur(22px) saturate(.7);
   transform: scale(1.06);
 }
 body::after {
