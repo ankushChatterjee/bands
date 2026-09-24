@@ -1195,7 +1195,7 @@ struct SettingsView: View {
 
     private func loadJevToken() {
         do {
-            jevToken = try SecureTokenStore.shared.token(forKey: SecureTokenKeys.jev) ?? ""
+            jevToken = try LocalTokenStore.shared.token(forKey: SecureTokenKeys.jev) ?? ""
         } catch {
             tokenMessage = "Unable to read the stored token."
         }
@@ -1205,14 +1205,14 @@ struct SettingsView: View {
     private func saveJevToken() -> Bool {
         do {
             if jevToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                try SecureTokenStore.shared.deleteToken(forKey: SecureTokenKeys.jev)
+                try LocalTokenStore.shared.deleteToken(forKey: SecureTokenKeys.jev)
             } else {
-                try SecureTokenStore.shared.setToken(jevToken, forKey: SecureTokenKeys.jev)
+                try LocalTokenStore.shared.setToken(jevToken, forKey: SecureTokenKeys.jev)
             }
-            tokenMessage = "Token stored securely."
+            tokenMessage = "Token stored locally."
             return true
         } catch {
-            tokenMessage = "Unable to store the token securely."
+            tokenMessage = "Unable to store the local token."
             return false
         }
     }

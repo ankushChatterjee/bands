@@ -44,11 +44,14 @@ stdout, preserving the MCP transport.
 
 ## Secure tokens
 
-User-supplied service tokens should be stored with the app's
-`SecureTokenStore`, using namespaced keys such as `bands:jev_key`. It uses
-macOS Keychain generic-password items with `WhenUnlockedThisDeviceOnly`
-accessibility and no biometric/password access-control policy. The user enters
-each token once; reads are silent while the Mac is unlocked.
+User-supplied service tokens are stored locally with the app's
+`LocalTokenStore`, using namespaced keys such as `bands:jev_key`. The store
+writes `~/Library/Application Support/bands/tokens.json` atomically with mode
+`0600`; its parent directory has mode `0700`. It deliberately does not use
+macOS Keychain. This is appropriate for low-risk tokens: it protects against
+other macOS users and accidental disclosure, but not software running as the
+current user. FileVault should be enabled. Existing Keychain tokens are not
+migrated, so users enter their token once after upgrading.
 
 Band objects returned by `list_bands` and `list_thoughts` include `id`, `name`,
 `description`, `order`, and `createdAt`. `description` is `null` for bands

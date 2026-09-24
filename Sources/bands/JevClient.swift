@@ -53,16 +53,16 @@ private struct JevResponse: Decodable {
 
 /// Thin HTTP client for Jev's System One Choice evaluation.
 ///
-/// The API token is loaded from SecureTokenStore and is never accepted as a
+/// The API token is loaded from LocalTokenStore and is never accepted as a
 /// request argument, logged, or included in an error message.
 final class JevClient: @unchecked Sendable {
     static let endpoint = URL(string: "https://api.typesafe.ai/v1/systemone")!
     static let model = "jev-latest"
     static let bandQuestionID = "band"
-    private let tokenStore: SecureTokenStore
+    private let tokenStore: LocalTokenStore
     private let session: URLSession
 
-    init(tokenStore: SecureTokenStore = .shared, session: URLSession = .shared) {
+    init(tokenStore: LocalTokenStore = .shared, session: URLSession = .shared) {
         self.tokenStore = tokenStore
         self.session = session
     }
