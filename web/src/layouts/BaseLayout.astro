@@ -1,0 +1,35 @@
+---
+import '../styles/global.css';
+const { title = 'bands — Calm the chaotic mind', description = 'A calm, simple space for the thoughts you don’t want to forget.' } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content={description} />
+    <meta name="theme-color" content="#111112" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <title>{title}</title>
+  </head>
+  <body>
+    <slot />
+    <script>
+      const cards = document.querySelectorAll<HTMLElement>('.feature-tile, .slot-card');
+      cards.forEach((card) => {
+        let frame = 0;
+        card.addEventListener('pointermove', (event) => {
+          if (event.pointerType === 'touch' || frame) return;
+          frame = requestAnimationFrame(() => {
+            const bounds = card.getBoundingClientRect();
+            card.style.setProperty('--pointer-x', `${event.clientX - bounds.left}px`);
+            card.style.setProperty('--pointer-y', `${event.clientY - bounds.top}px`);
+            frame = 0;
+          });
+        }, { passive: true });
+      });
+    </script>
+  </body>
+</html>
