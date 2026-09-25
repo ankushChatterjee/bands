@@ -1,9 +1,9 @@
-import { Clock3, Layers3, Zap } from 'lucide-react';
+import { AlertTriangle } from 'lucide-react';
 
 const features = [
-  { icon: Layers3, title: 'A little less clutter.', text: 'A clear place for the thoughts you want to keep.', graphic: 'clarity' },
-  { icon: Clock3, title: 'Thoughts age', text: 'A gentle color cue brings older thoughts back into view.', graphic: 'aging' },
-  { icon: Zap, title: 'Always within reach.', text: 'Capture a thought and get right back to your day.', graphic: 'reach' },
+  { title: 'A little sanity', text: 'Slot in your thoughts for a clearer mind', graphic: 'clarity' },
+  { title: 'Thoughts age', text: 'A gentle color cue brings older thoughts back into view.', graphic: 'aging' },
+  { title: 'Always within reach.', text: 'Lives within your toolbar', graphic: 'reach' },
 ];
 
 function FeatureGraphic({ type }: { type: string }) {
@@ -27,11 +27,9 @@ function FeatureGraphic({ type }: { type: string }) {
   }
   return (
     <svg className="feature-art feature-art--reach" viewBox="0 0 96 46" fill="none" aria-hidden="true">
-      <path d="M3 23h34" stroke="#d8c7a9" strokeWidth="2" strokeLinecap="round" strokeDasharray="2 5" />
-      <circle cx="7" cy="23" r="4" fill="#c77d62" />
-      <circle cx="22" cy="23" r="3" fill="#d5a568" />
-      <circle cx="38" cy="23" r="5" fill="#aab19f" />
-      <path d="M49 16h37M49 23h28M49 30h33" stroke="#8c9689" strokeWidth="3" strokeLinecap="round" />
+      <rect x="49" y="9" width="39" height="28" rx="8" fill="#efeee7" stroke="#d8d6cc" />
+      <path d="M57 18h23M57 25h16" stroke="#8c9689" strokeWidth="2.5" strokeLinecap="round" />
+      <path d="M13 8v21l6-6 4.5 9 3.5-1.8-4.5-9H31L13 8Z" fill="#c77d62" stroke="#fffaf0" strokeWidth="1.3" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -53,6 +51,7 @@ export default function LandingPage() {
           <a className="download-button" href="https://github.com/ankushChatterjee/bands/releases/latest">
             <span className="apple-mark" aria-hidden="true"></span>
             <span>Download</span>
+            <span className="download-badge"><AlertTriangle size={11} strokeWidth={2} aria-hidden="true" />pre-alpha</span>
           </a>
         </div>
 
@@ -61,15 +60,17 @@ export default function LandingPage() {
           <div className="slot-card" aria-label="Slot thoughts with Jev">
             <span className="slot-card__label">Slot thoughts with <strong>Jev</strong></span>
           </div>
+          <div className="slot-card slot-card--mcp" aria-label="Connect your AI using MCP">
+            <span className="slot-card__label">Connect your AI using <strong>MCP</strong></span>
+          </div>
         </div>
       </section>
 
       <section className="feature-list" aria-label="What bands does">
-        {features.map(({ icon: Icon, title, text, graphic }) => (
+        {features.map(({ title, text, graphic }) => (
           <article className="feature-tile" key={title}>
             <div className="tile-visual">
               <FeatureGraphic type={graphic} />
-              <div className="tile-top"><Icon size={21} strokeWidth={1.7}/></div>
             </div>
             <h2>{title}</h2>
             <p>{text}</p>
