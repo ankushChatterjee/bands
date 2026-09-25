@@ -47,7 +47,7 @@ export default function LandingPage() {
       <section className="hero" id="top">
         <div className="hero-copy">
           <h1>Calm the<br/><span>chaotic mind</span></h1>
-          <p className="hero-description">A mac toolbar app for organizing a multi-taking chaotic work session</p>
+          <p className="hero-description">A mac toolbar app for slotting in your thoughts and tasks into clear bands for a multi-tasking chaotic work session</p>
           <a className="download-button" href="https://github.com/ankushChatterjee/bands/releases/latest">
             <span className="apple-mark" aria-hidden="true"></span>
             <span>Download</span>
