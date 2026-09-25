@@ -48,7 +48,7 @@ export default function LandingPage() {
         <div className="hero-copy">
           <h1>Calm the<br/><span>chaotic mind</span></h1>
           <p className="hero-description">A mac toolbar app for slotting in your thoughts and tasks into clear bands for a multi-tasking chaotic work session</p>
-          <a className="download-button" href="https://github.com/ankushChatterjee/bands/releases/latest">
+          <a className="download-button" href="https://pub-690e2dfca33444bcb4b2e04193dc76fc.r2.dev/pre-alpha.1.5.0/bands-pre-alpha.1.5.0.dmg">
             <span className="apple-mark" aria-hidden="true"></span>
             <span>Download</span>
             <span className="download-badge"><AlertTriangle size={11} strokeWidth={2} aria-hidden="true" />pre-alpha</span>
