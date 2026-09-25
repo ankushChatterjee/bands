@@ -3,6 +3,7 @@ import Combine
 import SwiftData
 import UniformTypeIdentifiers
 import AppKit
+import LinkPresentation
 
 private struct PointingHandCursorModifier: ViewModifier {
     func body(content: Content) -> some View {
@@ -100,7 +101,10 @@ struct FlowLayout: Layout {
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
         let width = proposal.width ?? 500
         let rows = layoutRows(in: width, subviews: subviews)
-        return CGSize(width: width, height: rows.reduce(0) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * spacing)
+        let contentWidth = rows.map { row in
+            row.items.reduce(0) { $0 + $1.size.width } + CGFloat(max(0, row.items.count - 1)) * spacing
+        }.max() ?? 0
+        return CGSize(width: min(width, contentWidth), height: rows.reduce(0) { $0 + $1.height } + CGFloat(max(0, rows.count - 1)) * spacing)
     }
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
         let rows = layoutRows(in: bounds.width, subviews: subviews)
@@ -580,7 +584,8 @@ struct RootView: View {
         quickCaptureMessage = nil
         Task { @MainActor in
             do {
-                let result = try await JevClient().autoCategorize(thought: thought, bands: bands)
+                let contextForJev = await ThoughtURL.categorizationContext(for: thought)
+                let result = try await JevClient().autoCategorize(thought: contextForJev, bands: bands)
                 guard result.confidence >= JevSettings.confidenceThreshold,
                       let bandID = result.bandID,
                       let band = bands.first(where: { $0.id == bandID }) else {
@@ -1652,6 +1657,115 @@ private struct ThoughtBubble<Content: View>: View {
     }
 }
 
+private enum ThoughtURL {
+    static func matches(in text: String) -> [(range: Range<String.Index>, url: URL)] {
+        guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return [] }
+        return detector.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap { match in
+            guard let range = Range(match.range, in: text), let url = match.url,
+                  let scheme = url.scheme?.lowercased(), scheme == "http" || scheme == "https" else { return nil }
+            return (range, url)
+        }
+    }
+
+    /// Preserve the captured text while giving Jev the page titles that are
+    /// otherwise only available to the visual URL pills.
+    static func categorizationContext(for text: String) async -> String {
+        let links = matches(in: text).map(\.url)
+        guard !links.isEmpty else { return text }
+
+        var details: [String] = []
+        for url in links {
+            let title = await LinkPreviewCache.load(for: url).title
+            details.append("URL: \(url.absoluteString)\nTitle: \(title)")
+        }
+        return "\(text)\n\nLink details:\n\(details)"
+    }
+}
+
+private struct LinkPreview: Codable {
+    let title: String
+    let iconData: Data?
+    let fetchedAt: Date
+}
+
+private enum LinkPreviewCache {
+    private static let storageKey = "linkPreviewCache"
+    private static let refreshInterval: TimeInterval = 12 * 60 * 60
+
+    static func cached(for url: URL) -> LinkPreview? {
+        guard let value = entries()[url.absoluteString], Date.now.timeIntervalSince(value.fetchedAt) < refreshInterval else { return nil }
+        return value
+    }
+
+    static func save(_ preview: LinkPreview, for url: URL) {
+        var values = entries()
+        values[url.absoluteString] = preview
+        if let data = try? JSONEncoder().encode(values) { UserDefaults.standard.set(data, forKey: storageKey) }
+    }
+
+    static func load(for url: URL) async -> LinkPreview {
+        if let cached = cached(for: url) { return cached }
+        return await fetch(for: url)
+    }
+
+    static func fetch(for url: URL) async -> LinkPreview {
+        await withCheckedContinuation { continuation in
+            let provider = LPMetadataProvider()
+            provider.startFetchingMetadata(for: url) { metadata, _ in
+                let title = metadata?.title ?? url.host?.replacingOccurrences(of: "www.", with: "") ?? url.absoluteString
+                guard let iconProvider = metadata?.iconProvider else {
+                    let preview = LinkPreview(title: title, iconData: nil, fetchedAt: .now)
+                    save(preview, for: url); continuation.resume(returning: preview); return
+                }
+                iconProvider.loadDataRepresentation(forTypeIdentifier: "public.image") { data, _ in
+                    let preview = LinkPreview(title: title, iconData: data, fetchedAt: .now)
+                    save(preview, for: url)
+                    continuation.resume(returning: preview)
+                }
+            }
+        }
+    }
+
+    private static func entries() -> [String: LinkPreview] {
+        guard let data = UserDefaults.standard.data(forKey: storageKey),
+              let values = try? JSONDecoder().decode([String: LinkPreview].self, from: data) else { return [:] }
+        return values
+    }
+}
+
+private struct ThoughtLinkPill: View {
+    let url: URL
+    var showsPillBackground = true
+    var fallbackTitle: String { url.host?.replacingOccurrences(of: "www.", with: "") ?? url.absoluteString }
+    @State private var preview: LinkPreview?
+    var title: String { preview?.title ?? fallbackTitle }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Group {
+                if let data = preview?.iconData, let image = NSImage(data: data) {
+                    Image(nsImage: image).resizable().scaledToFit()
+                } else {
+                    Image(systemName: "link").font(.system(size: 9, weight: .medium)).foregroundStyle(.secondary)
+                }
+            }
+            .frame(width: 12, height: 12)
+            Text(title).lineLimit(1).truncationMode(.tail)
+        }
+        .font(showsPillBackground ? .system(size: 11, weight: .medium) : .system(size: NSFont.systemFontSize))
+        .padding(.horizontal, showsPillBackground ? 6 : 0).padding(.vertical, showsPillBackground ? 3 : 0)
+        .background { if showsPillBackground { Capsule().fill(.primary.opacity(0.07)) } }
+        .overlay { if showsPillBackground { Capsule().strokeBorder(.primary.opacity(0.08), lineWidth: 0.5) } }
+        .help(url.absoluteString)
+        .onTapGesture { NSWorkspace.shared.open(url) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), link")
+        .task(id: url) {
+            preview = await LinkPreviewCache.load(for: url)
+        }
+    }
+}
+
 struct ThoughtChip: View {
     @Environment(\.modelContext) private var context
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -1729,7 +1843,7 @@ struct ThoughtChip: View {
             .padding(.trailing, 8)
             .overlay(alignment: .trailing) { if hovering { completionButton } }
             .overlay { keyboardFocusOverlay }
-            .overlay(alignment: .bottomLeading) { if hovering && isThoughtTruncated { fullTextOverlay } }
+            .overlay(alignment: .bottomLeading) { if hovering && isThoughtTruncated && !expandedNonLinkText.isEmpty { fullTextOverlay } }
             .frame(maxWidth: 360, alignment: .leading).zIndex(hovering ? 10 : 0)
             .onHover { hovering = $0 }.pointingHandCursor()
             .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: hovering)
@@ -1739,7 +1853,46 @@ struct ThoughtChip: View {
             .onKeyPress(.return) { beginEdit(); return .handled }
     }
     private var thoughtBubble: some View {
-        ThoughtBubble(age: age) { HStack(spacing: 6) { Text(thought.text).lineLimit(1).truncationMode(.tail).frame(maxWidth: 292, alignment: .leading); Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(BandsTheme.secondaryText(colorScheme)) } }
+        ThoughtBubble(age: age) {
+            let matches = ThoughtURL.matches(in: thought.text)
+            HStack(spacing: 6) {
+                if matches.isEmpty {
+                    // Keep the established rendering untouched for ordinary thoughts.
+                    Text(thought.text).lineLimit(1).truncationMode(.tail).frame(maxWidth: 292, alignment: .leading)
+                } else if matches.count == 1, matches[0].range == thought.text.startIndex..<thought.text.endIndex {
+                    ThoughtLinkPill(url: matches[0].url, showsPillBackground: false).lineLimit(1).frame(maxWidth: 292, alignment: .leading)
+                } else {
+                    FlowLayout(spacing: 3) {
+                        ForEach(Array(thoughtDisplayParts.enumerated()), id: \.offset) { _, part in
+                            switch part {
+                            case .text(let value): Text(value).fixedSize()
+                            case .link(let url): ThoughtLinkPill(url: url)
+                            }
+                        }
+                    }.frame(maxWidth: 292, alignment: .leading).lineLimit(2)
+                }
+                Text(timestamp).font(.caption2.monospacedDigit()).foregroundStyle(BandsTheme.secondaryText(colorScheme))
+            }
+        }
+    }
+    private enum ThoughtDisplayPart { case text(String), link(URL) }
+    private var thoughtDisplayParts: [ThoughtDisplayPart] {
+        let matches = ThoughtURL.matches(in: thought.text)
+        guard !matches.isEmpty else { return [.text(thought.text)] }
+        var parts: [ThoughtDisplayPart] = []; var cursor = thought.text.startIndex
+        for match in matches {
+            if cursor < match.range.lowerBound {
+                let text = String(thought.text[cursor..<match.range.lowerBound])
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                if !text.isEmpty { parts.append(.text(text)) }
+            }
+            parts.append(.link(match.url)); cursor = match.range.upperBound
+        }
+        if cursor < thought.text.endIndex {
+            let text = String(thought.text[cursor...]).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty { parts.append(.text(text)) }
+        }
+        return parts
     }
     private var completionButton: some View {
         Button(action: complete) { Image(systemName: "checkmark").font(.caption.weight(.bold)) }.buttonStyle(.plain).foregroundStyle(.primary).frame(width: 18, height: 18).background(.regularMaterial, in: Circle()).overlay(Circle().strokeBorder(.primary.opacity(0.12))).pointingHandCursor().accessibilityLabel("Complete thought")
@@ -1751,7 +1904,14 @@ struct ThoughtChip: View {
         }
     }
     private var fullTextOverlay: some View {
-        Text(thought.text).font(.callout).foregroundStyle(.primary).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).frame(maxWidth: 340, alignment: .leading).padding(.horizontal, 11).padding(.vertical, 8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.14))).shadow(color: .black.opacity(0.18), radius: 10, y: 5).offset(y: 12).zIndex(20).allowsHitTesting(false)
+        Text(expandedNonLinkText).font(.callout).foregroundStyle(.primary).multilineTextAlignment(.leading).fixedSize(horizontal: false, vertical: true).frame(maxWidth: 340, alignment: .leading).padding(.horizontal, 11).padding(.vertical, 8).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous)).overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(.primary.opacity(0.14))).shadow(color: .black.opacity(0.18), radius: 10, y: 5).offset(y: 12).zIndex(20).allowsHitTesting(false)
+    }
+    private var expandedNonLinkText: String {
+        let matches = ThoughtURL.matches(in: thought.text)
+        guard !matches.isEmpty else { return thought.text }
+        var result = thought.text
+        for match in matches.reversed() { result.removeSubrange(match.range) }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
     }
     private var ageLabel: String { ThoughtAging.label(for: thought, settings: agingStore.settings, now: now).map { "\($0) old" } ?? "fresh" }
     private func beginEdit() {
