@@ -1,74 +1,72 @@
 # bands
 
-bands is a small, local-first native macOS menu bar app for quickly putting thoughts somewhere safe.
+bands is a local-first macOS menu bar app for capturing and organizing thoughts in named bands. It stores data on the device with SwiftData and keeps the main interface close at hand from the menu bar.
+
+## What the app does
+
+- Capture thoughts from the menu bar or with global shortcuts (Option-L opens the panel; Option-Q starts quick capture).
+- Organize thoughts into named bands, add descriptions, reorder items, and complete or release thoughts.
+- Navigate and edit from the keyboard, with shortcuts also listed in Settings.
+- Track thought age with configurable thresholds and optional macOS notifications.
+- Optionally use Jev to suggest a band for a quick capture. This requires a Jev token entered in Settings; without one, thoughts can be assigned manually.
+- Optionally expose local band and thought operations through the `bands-mcp` MCP helper. The helper communicates with the running app over a local Unix socket. See [docs/MCP.md](docs/MCP.md).
+
+The app is built with SwiftUI and AppKit, and persists its data with SwiftData. The core capture and organization features work locally. Jev categorization is the feature that makes an HTTPS request; it is opt-in and requires the user's own token. There is no account or telemetry service.
 
 ## Requirements
 
-- macOS 14+
-- Xcode 16.4+
-- Swift 6.1+ (included with Xcode 16.4)
+- macOS 14 or later
+- Xcode 16.4 or later (Swift 6.1 toolchain)
 
-## Build, test, run, and archive
+## Build and test
+
+From the repository root, the Swift Package Manager commands build the app and MCP helper and run the unit tests:
 
 ```sh
 swift build
 swift test
 ```
 
-The SwiftPM commands above remain the dependency-free developer/test path. The packaged app path is an Xcode project and produces a real menu-bar `.app` bundle:
+The Xcode project packages the menu-bar app as a `.app` bundle. Its convenience scripts are:
 
 ```sh
-open bands.xcodeproj
-./scripts/build.sh       # Debug bands.app in .build/xcode/Build/Products/Debug
-./scripts/test.sh        # swift test -j 2
-./scripts/run.sh         # build, then open bands.app
-./scripts/archive.sh     # unsigned Release archive in .build/bands.xcarchive
-./scripts/install-local.sh # build and copy to ~/Applications/bands.app
+./scripts/build.sh          # Debug app bundle plus bands-mcp helper
+./scripts/test.sh           # Run Swift unit tests
+./scripts/run.sh            # Build and launch the app
+./scripts/archive.sh        # Unsigned Release archive plus MCP helper
+./scripts/install-local.sh  # Build and copy the app into ~/Applications
 ```
 
-In Xcode, select the `bands` scheme and Run. The target uses `Supporting/Info.plist`; its packaged value is `LSUIElement = true`, so the app is configured as a menu-bar utility. The app icon is generated locally by `scripts/generate-placeholder-icon.sh` (no remote assets or third-party tools) and is included in the asset catalog during scripted builds. Xcode Run may show the placeholder icon only after that script has been run once.
+Open `bands.xcodeproj`, select the `bands` scheme, and choose Run to build from Xcode. Scripted builds generate the app icon locally with `scripts/generate-placeholder-icon.sh`.
 
-The archive and scripted builds intentionally set `CODE_SIGNING_ALLOWED=NO` for local development. No signing, notarization, Gatekeeper approval, or Dock behavior is claimed. For distribution, configure your own Apple Developer team, signing identity, provisioning settings, and notarization workflow in Xcode.
+Build products are written under `.build/`. The app target uses `Supporting/Info.plist` and is configured as a menu-bar utility (`LSUIElement = true`). Local build and archive commands do not configure Developer ID distribution or notarization.
 
-## Local self-signed releases
+## Optional self-signed release
 
-`scripts/build_and_release` re-signs the archived app and its DMG using a local code-signing identity. It is not a Developer ID signature and does not avoid Gatekeeper's unknown-developer warning.
+The `scripts/build_and_release` script creates a release archive and DMG, signs them with a local code-signing identity, and creates a Git tag. It does not provide a Developer ID signature unless you supply one, and a local Apple Development signature may still trigger Gatekeeper warnings.
 
-List local signing identities with:
+First list identities available on your Mac:
 
 ```sh
 security find-identity -v -p codesigning
 ```
 
-The release script uses the local `Apple Development: ac.ankush15@gmail.com (J6G9D2S38S)` identity by default. Create a release with it:
+Pass the desired identity explicitly:
 
 ```sh
-./scripts/build_and_release alpha
+SELF_SIGNING_IDENTITY="Apple Development: Your Name (TEAMID)" ./scripts/build_and_release alpha
 ```
 
-Override the identity for a particular release when needed:
-
-```sh
-SELF_SIGNING_IDENTITY="Another Local Identity" ./scripts/build_and_release alpha
-```
-
-For distribution without a second Gatekeeper warning when launching the copied app,
-use a Developer ID Application identity and notarize both artifacts. Store the
-notarytool credentials in the Keychain, then pass the profile name:
+For notarization, configure a `notarytool` Keychain profile and provide it along with a suitable Developer ID Application identity:
 
 ```sh
 SELF_SIGNING_IDENTITY="Developer ID Application: Your Name (TEAMID)" \
-NOTARYTOOL_PROFILE="bands-notary" ./scripts/build_and_release alpha
+NOTARYTOOL_PROFILE="your-notary-profile" ./scripts/build_and_release alpha
 ```
 
-Notarization is the supported way to avoid separate DMG and app warnings. A local
-Apple Development signature can still produce Gatekeeper warnings on both the DMG
-and the app, and cannot reliably be reduced to exactly one warning by DMG layout.
+The release script requires a clean worktree on a named branch and a new valid Git tag. It tags the release after successfully building and signing the artifacts.
 
-The app uses SwiftUI for its panel, AppKit for the status item/panel and local macOS notifications, and SwiftData for the on-device store. It has no network, account, telemetry, voice, or AI code.
+## More documentation
 
-## V1 interaction
-
-Click the grid icon in the menu bar, type into the capture field, and press Return. Captures land in the first band; band-local `+` adds directly to that band. Click a thought to complete it, double-click to edit, or use its context menu to move or let it go. Thought age is derived from its creation date and is shown with increasingly warm semantic colors.
-
-The package scaffold intentionally keeps the product small. The Xcode app target is now available without changing the SwiftUI/domain layer. The app icon and menu-bar status icon share the same three parallel-rail mark.
+- [Keyboard interaction and shortcuts](docs/KEYBOARD.md)
+- [Local MCP bridge setup and protocol](docs/MCP.md)
